@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Texas Hold'em Poker</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Texas Hold'em</h1>
+      <span id="phase" class="phase-badge">Ready</span>
+    </header>
+
+    <div class="table-area">
+      <div class="table">
+        <div class="table-felt">
+          <div id="pot" class="pot"></div>
+          <div id="community" class="community"></div>
+        </div>
+        <div id="seats" class="seats"></div>
+      </div>
+    </div>
+
+    <div id="message" class="message-bar"></div>
+
+    <div id="controls" class="controls hidden">
+      <button id="btn-fold" class="btn btn-fold">Fold</button>
+      <button id="btn-check" class="btn btn-check">Check</button>
+      <button id="btn-call" class="btn btn-call">Call</button>
+      <div class="raise-group">
+        <input type="range" id="raise-slider" min="0" max="1000" value="40">
+        <span id="raise-value" class="raise-value">40</span>
+        <button id="btn-raise" class="btn btn-raise">Raise</button>
+      </div>
+    </div>
+
+    <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
+
+    <aside class="sidebar">
+      <h2>Action Log</h2>
+      <div id="log" class="log"></div>
+    </aside>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
