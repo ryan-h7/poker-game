@@ -142,6 +142,34 @@ function getSeatPosition(index, total) {
   };
 }
 
+export function showJoinModal(elements, roomId) {
+  const { joinModal, joinModalRoomCode, joinModalName, joinModalError } = elements;
+  if (!joinModal) return;
+  if (joinModalRoomCode) joinModalRoomCode.textContent = roomId;
+  if (joinModalError) {
+    joinModalError.textContent = '';
+    joinModalError.classList.add('hidden');
+  }
+  joinModal.classList.remove('hidden');
+  document.body.classList.add('modal-open', 'invite-join-pending');
+  joinModalName?.focus();
+}
+
+export function hideJoinModal(elements) {
+  elements.joinModal?.classList.add('hidden');
+  document.body.classList.remove('modal-open', 'invite-join-pending');
+  if (elements.joinModalError) {
+    elements.joinModalError.textContent = '';
+    elements.joinModalError.classList.add('hidden');
+  }
+}
+
+export function setJoinModalError(elements, message) {
+  if (!elements.joinModalError) return;
+  elements.joinModalError.textContent = message;
+  elements.joinModalError.classList.toggle('hidden', !message);
+}
+
 export function renderLobby(elements, lobby) {
   const {
     multiplayerPanel, lobbyEntry, lobbyActive, lobbyRoomCode, lobbyPlayers,
@@ -301,7 +329,14 @@ function renderControls(game, elements) {
   if (displayDollarsBtn) displayDollarsBtn.classList.toggle('active', !game.showInBB);
   if (displayBBBtn) displayBBBtn.classList.toggle('active', game.showInBB);
 
-  if (setupBar) setupBar.classList.toggle('hidden', !canConfigure);
+  if (setupBar) {
+    const inOnlineLobby = game.onlineMode && (game.phase === 'idle' || game.phase === 'showdown');
+    if (inOnlineLobby && !game.isHost) {
+      setupBar.classList.add('hidden');
+    } else {
+      setupBar.classList.toggle('hidden', !canConfigure);
+    }
+  }
   if (skipBar) skipBar.classList.toggle('hidden', !game.canSkipHand());
   if (skipBtn) skipBtn.disabled = game.fastForward;
   if (playerCountSelect) {

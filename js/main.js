@@ -3,6 +3,7 @@ import {
   renderGame, setMessage, setRaiseAmount, getSelectedRaiseAmount,
   raiseDisplayToChips, syncRaiseInputFromChips, updateRaiseFromChips,
   renderLobby, showMultiplayerEntry, hideMultiplayerPanel,
+  showJoinModal, hideJoinModal, setJoinModalError,
 } from './ui.js';
 import { NetworkClient, getRoomFromUrl, clearRoomFromUrl } from './network.js';
 
@@ -50,12 +51,19 @@ const elements = {
   lobbyRoomCode: document.getElementById('lobby-room-code'),
   lobbyPlayers: document.getElementById('lobby-players'),
   lobbyHint: document.getElementById('lobby-hint'),
+  joinModal: document.getElementById('join-modal'),
+  joinModalRoomCode: document.getElementById('join-modal-room-code'),
+  joinModalName: document.getElementById('join-modal-name'),
+  joinModalError: document.getElementById('join-modal-error'),
+  joinModalSubmit: document.getElementById('btn-join-modal-submit'),
+  joinModalCancel: document.getElementById('btn-join-modal-cancel'),
 };
 
 let autoSkipWhenFolded = false;
 let showBotHandsAtEnd = false;
 let showInBB = false;
 let inOnlineRoom = false;
+let pendingInviteRoomId = null;
 
 try {
   autoSkipWhenFolded = localStorage.getItem('poker-auto-skip') === '1';
@@ -64,7 +72,10 @@ try {
   if (elements.showBotHandsCheckbox) elements.showBotHandsCheckbox.checked = showBotHandsAtEnd;
   showInBB = localStorage.getItem('poker-show-in-bb') === '1';
   const savedName = localStorage.getItem('poker-player-name');
-  if (savedName && elements.playerNameInput) elements.playerNameInput.value = savedName;
+  if (savedName) {
+    if (elements.playerNameInput) elements.playerNameInput.value = savedName;
+    if (elements.joinModalName) elements.joinModalName.value = savedName;
+  }
 } catch { /* ignore */ }
 
 const game = new PokerGame(
@@ -78,33 +89,58 @@ const network = new NetworkClient({
   onLobby: (lobby) => {
     inOnlineRoom = true;
     game.onlineMode = true;
+    game.lobbyPanelOpen = true;
     game.isHost = lobby.isHost;
     const me = lobby.members.find(m => m.id === network.socket?.id);
     if (me) game.localSeatIndex = me.seatIndex;
     game.playerCount = lobby.settings.playerCount;
     game.bigBlind = lobby.settings.bigBlind;
+    hideJoinModal(elements);
     renderLobby(elements, lobby);
-    setMessage(elements.message, lobby.message);
+    setMessage(elements.message, lobby.isHost
+      ? 'Share the invite link. Deal when everyone has joined.'
+      : 'You\'re in the lobby — waiting for the host to deal.');
     renderGame(game, elements);
   },
   onGameState: (state) => {
     inOnlineRoom = true;
+    hideJoinModal(elements);
     game.applyNetworkState(state);
     game.isHost = state.isHost;
     game.localSeatIndex = state.localSeatIndex;
+    game.lobbyPanelOpen = state.phase === 'idle' || state.phase === 'showdown';
     setMessage(elements.message, state.message || '');
     renderGame(game, elements);
   },
 });
 
-function getPlayerName() {
-  const name = elements.playerNameInput?.value?.trim() || 'Player';
+function getPlayerName(fromModal = false) {
+  const raw = fromModal
+    ? elements.joinModalName?.value
+    : elements.playerNameInput?.value;
+  const name = String(raw || 'Player').trim() || 'Player';
   try { localStorage.setItem('poker-player-name', name); } catch { /* ignore */ }
+  if (elements.playerNameInput) elements.playerNameInput.value = name;
+  if (elements.joinModalName) elements.joinModalName.value = name;
   return name.slice(0, 16);
 }
 
 function isOnline() {
   return inOnlineRoom && game.onlineMode;
+}
+
+async function joinInviteRoom(roomId) {
+  const btn = elements.joinModalSubmit;
+  if (btn) btn.disabled = true;
+  setJoinModalError(elements, '');
+  try {
+    await network.joinRoom(roomId, getPlayerName(true));
+    pendingInviteRoomId = null;
+  } catch (err) {
+    setJoinModalError(elements, err.message || 'Could not join room.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function sendAction(action, amount = 0) {
@@ -143,7 +179,7 @@ elements.stopReplayBtn.addEventListener('click', () => game.stopReplay());
 elements.playFriendsBtn?.addEventListener('click', () => {
   game.lobbyPanelOpen = true;
   showMultiplayerEntry(elements);
-  setMessage(elements.message, 'Enter your name, then create a room or join from a link.');
+  setMessage(elements.message, 'Enter your name, then create a room.');
   elements.multiplayerPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   renderGame(game, elements);
 });
@@ -165,6 +201,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     inOnlineRoom = true;
     game.onlineMode = true;
     game.isHost = true;
+    game.lobbyPanelOpen = true;
     game.localSeatIndex = 0;
     setMessage(elements.message, 'Room created! Share the invite link.');
     renderGame(game, elements);
@@ -181,9 +218,26 @@ elements.joinRoomBtn.addEventListener('click', async () => {
   }
   try {
     await network.joinRoom(roomId, getPlayerName());
-    setMessage(elements.message, `Joined room ${roomId}.`);
   } catch (err) {
     setMessage(elements.message, err.message);
+  }
+});
+
+elements.joinModalSubmit?.addEventListener('click', () => {
+  if (pendingInviteRoomId) joinInviteRoom(pendingInviteRoomId);
+});
+
+elements.joinModalCancel?.addEventListener('click', () => {
+  hideJoinModal(elements);
+  pendingInviteRoomId = null;
+  clearRoomFromUrl();
+  setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
+});
+
+elements.joinModalName?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && pendingInviteRoomId) {
+    e.preventDefault();
+    joinInviteRoom(pendingInviteRoomId);
   }
 });
 
@@ -196,6 +250,8 @@ elements.leaveRoomBtn.addEventListener('click', () => {
   game.phase = 'idle';
   game.resetPlayers();
   hideMultiplayerPanel(elements);
+  hideJoinModal(elements);
+  clearRoomFromUrl();
   setMessage(elements.message, 'Left the room.');
   renderGame(game, elements);
 });
@@ -308,10 +364,11 @@ elements.raiseBtn.addEventListener('click', () => submitRaise(false));
 elements.allInBtn.addEventListener('click', () => submitRaise(true));
 
 renderGame(game, elements);
-setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" for multiplayer.');
 
 const roomFromUrl = getRoomFromUrl();
 if (roomFromUrl) {
-  showMultiplayerEntry(elements);
-  setMessage(elements.message, `Invite link detected — room ${roomFromUrl}. Enter your name and click Join.`);
+  pendingInviteRoomId = roomFromUrl;
+  showJoinModal(elements, roomFromUrl);
+} else {
+  setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
 }

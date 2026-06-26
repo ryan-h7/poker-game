@@ -121,6 +121,21 @@
     </aside>
   </div>
 
+  <div id="join-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="join-modal-title">
+    <div class="join-modal-card">
+      <h2 id="join-modal-title">Join friend's game</h2>
+      <p class="join-modal-sub">You've been invited to a poker table.</p>
+      <p class="join-modal-room">Room <strong id="join-modal-room-code">—</strong></p>
+      <label class="join-modal-label" for="join-modal-name">Your name</label>
+      <input type="text" id="join-modal-name" class="join-modal-input" placeholder="Enter your name" maxlength="16" autocomplete="nickname">
+      <p id="join-modal-error" class="join-modal-error hidden"></p>
+      <div class="join-modal-actions">
+        <button id="btn-join-modal-submit" class="btn btn-join-modal" type="button">Join Game</button>
+        <button id="btn-join-modal-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="js/main.js"></script>
 </body>
