@@ -484,8 +484,10 @@ header h1 {
   grid-column: 1;
   justify-self: center;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
+  order: 11;
 }
 
 .setup-bar.hidden { display: none; }
@@ -525,9 +527,10 @@ header h1 {
 .multiplayer-panel {
   grid-column: 1 / -1;
   background: var(--surface);
-  border: 1px solid #30363d;
+  border: 1px solid var(--gold);
   border-radius: 12px;
   padding: 1rem 1.25rem;
+  order: 10;
 }
 
 .multiplayer-panel.hidden { display: none; }

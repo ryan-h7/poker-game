@@ -140,8 +140,12 @@ elements.newHandBtn.addEventListener('click', async () => {
 elements.replayHandBtn.addEventListener('click', () => game.replayHand());
 elements.stopReplayBtn.addEventListener('click', () => game.stopReplay());
 
-elements.playFriendsBtn.addEventListener('click', () => {
+elements.playFriendsBtn?.addEventListener('click', () => {
+  game.lobbyPanelOpen = true;
   showMultiplayerEntry(elements);
+  setMessage(elements.message, 'Enter your name, then create a room or join from a link.');
+  elements.multiplayerPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  renderGame(game, elements);
 });
 
 elements.createRoomBtn.addEventListener('click', async () => {
@@ -188,6 +192,7 @@ elements.leaveRoomBtn.addEventListener('click', () => {
   inOnlineRoom = false;
   game.onlineMode = false;
   game.isHost = false;
+  game.lobbyPanelOpen = false;
   game.phase = 'idle';
   game.resetPlayers();
   hideMultiplayerPanel(elements);

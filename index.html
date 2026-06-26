@@ -67,27 +67,6 @@
       </div>
     </div>
 
-    <div id="multiplayer-panel" class="multiplayer-panel hidden">
-      <div class="multiplayer-header">
-        <h2>Play with Friends</h2>
-        <button id="btn-leave-room" class="btn btn-leave hidden" type="button">Leave Room</button>
-      </div>
-      <div id="lobby-entry" class="lobby-entry">
-        <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
-        <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
-        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join from Link</button>
-      </div>
-      <div id="lobby-active" class="lobby-active hidden">
-        <p class="lobby-hint" id="lobby-hint">Share the link with friends.</p>
-        <div class="lobby-code">Room: <strong id="lobby-room-code">—</strong></div>
-        <div class="invite-row">
-          <input type="text" id="invite-link" class="invite-link" readonly>
-          <button id="btn-copy-link" class="btn btn-copy" type="button">Copy Link</button>
-        </div>
-        <ul id="lobby-players" class="lobby-players"></ul>
-      </div>
-    </div>
-
     <div id="setup-bar" class="setup-bar">
       <label class="setup-label" for="player-count">Players</label>
       <select id="player-count" class="setup-select">
@@ -113,6 +92,27 @@
         <input type="checkbox" id="show-bot-hands">
         Show bot hands after each hand
       </label>
+    </div>
+
+    <div id="multiplayer-panel" class="multiplayer-panel hidden">
+      <div class="multiplayer-header">
+        <h2>Play with Friends</h2>
+        <button id="btn-leave-room" class="btn btn-leave hidden" type="button">Leave Room</button>
+      </div>
+      <div id="lobby-entry" class="lobby-entry">
+        <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
+        <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
+        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join from Link</button>
+      </div>
+      <div id="lobby-active" class="lobby-active hidden">
+        <p class="lobby-hint" id="lobby-hint">Share the link with friends.</p>
+        <div class="lobby-code">Room: <strong id="lobby-room-code">—</strong></div>
+        <div class="invite-row">
+          <input type="text" id="invite-link" class="invite-link" readonly>
+          <button id="btn-copy-link" class="btn btn-copy" type="button">Copy Link</button>
+        </div>
+        <ul id="lobby-players" class="lobby-players"></ul>
+      </div>
     </div>
 
     <aside class="sidebar">

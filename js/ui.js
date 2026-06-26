@@ -310,8 +310,9 @@ function renderControls(game, elements) {
   const inHand = game.phase !== 'idle' && game.phase !== 'showdown';
 
   if (elements.leaveRoomBtn) elements.leaveRoomBtn.classList.toggle('hidden', !game.onlineMode);
+  const showLobby = game.onlineMode || game.lobbyPanelOpen;
   if (elements.multiplayerPanel) {
-    elements.multiplayerPanel.classList.toggle('hidden', !game.onlineMode || inHand);
+    elements.multiplayerPanel.classList.toggle('hidden', !showLobby || inHand);
   }
   if (elements.playFriendsBtn) {
     elements.playFriendsBtn.classList.toggle('hidden', game.onlineMode);

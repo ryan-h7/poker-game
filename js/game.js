@@ -53,6 +53,7 @@ export class PokerGame {
     this.currentHandEvents = null;
     this.replayIndex = 0;
     this.onlineMode = false;
+    this.lobbyPanelOpen = false;
     this.serverMode = false;
     this.localSeatIndex = 0;
     this.isHost = false;
