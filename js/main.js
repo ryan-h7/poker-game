@@ -5,7 +5,7 @@ import {
   renderLobby, showMultiplayerEntry, hideMultiplayerPanel,
   showJoinModal, hideJoinModal, setJoinModalError,
 } from './ui.js';
-import { NetworkClient, getRoomFromUrl, clearRoomFromUrl } from './network.js';
+import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode } from './network.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -28,7 +28,11 @@ const elements = {
   newHandBtn: document.getElementById('btn-new-hand'),
   replayHandBtn: document.getElementById('btn-replay-hand'),
   playFriendsBtn: document.getElementById('btn-play-friends'),
-  playerCountSelect: document.getElementById('player-count'),
+  addBotBtn: document.getElementById('btn-add-bot'),
+  removeBotBtn: document.getElementById('btn-remove-bot'),
+  botCountLabel: document.getElementById('bot-count'),
+  tableSizeHint: document.getElementById('table-size-hint'),
+  startingStackSelect: document.getElementById('starting-stack'),
   bigBlindSelect: document.getElementById('big-blind'),
   setupBar: document.getElementById('setup-bar'),
   skipBar: document.getElementById('skip-bar'),
@@ -43,6 +47,7 @@ const elements = {
   lobbyEntry: document.getElementById('lobby-entry'),
   lobbyActive: document.getElementById('lobby-active'),
   playerNameInput: document.getElementById('player-name'),
+  joinRoomCodeInput: document.getElementById('join-room-code'),
   createRoomBtn: document.getElementById('btn-create-room'),
   joinRoomBtn: document.getElementById('btn-join-room'),
   leaveRoomBtn: document.getElementById('btn-leave-room'),
@@ -51,8 +56,11 @@ const elements = {
   lobbyRoomCode: document.getElementById('lobby-room-code'),
   lobbyPlayers: document.getElementById('lobby-players'),
   lobbyHint: document.getElementById('lobby-hint'),
+  lobbyTableSettings: document.getElementById('lobby-table-settings'),
   joinModal: document.getElementById('join-modal'),
-  joinModalRoomCode: document.getElementById('join-modal-room-code'),
+  joinModalTitle: document.getElementById('join-modal-title'),
+  joinModalSub: document.getElementById('join-modal-sub'),
+  joinModalRoomInput: document.getElementById('join-modal-room'),
   joinModalName: document.getElementById('join-modal-name'),
   joinModalError: document.getElementById('join-modal-error'),
   joinModalSubmit: document.getElementById('btn-join-modal-submit'),
@@ -92,9 +100,14 @@ const network = new NetworkClient({
     game.lobbyPanelOpen = true;
     game.isHost = lobby.isHost;
     const me = lobby.members.find(m => m.id === network.socket?.id);
-    if (me) game.localSeatIndex = me.seatIndex;
+    if (me) {
+      game.localSeatIndex = me.seatIndex;
+      network.seatIndex = me.seatIndex;
+    }
     game.playerCount = lobby.settings.playerCount;
     game.bigBlind = lobby.settings.bigBlind;
+    game.startingStack = lobby.settings.startingStack ?? 1000;
+    game.setOnlinePlayers(lobby.members, lobby.settings.playerCount);
     hideJoinModal(elements);
     renderLobby(elements, lobby);
     setMessage(elements.message, lobby.isHost
@@ -125,22 +138,59 @@ function getPlayerName(fromModal = false) {
   return name.slice(0, 16);
 }
 
+function getTableSettings() {
+  return {
+    playerCount: game.playerCount,
+    bigBlind: parseInt(elements.bigBlindSelect.value, 10),
+    startingStack: parseInt(elements.startingStackSelect.value, 10),
+  };
+}
+
+async function pushTableSettings(patch = {}) {
+  const settings = { ...getTableSettings(), ...patch };
+  if (isOnline() && game.isHost) {
+    const res = await network.updateSettings(settings);
+    if (!res.ok) {
+      setMessage(elements.message, res.error || 'Could not update table settings.');
+      return false;
+    }
+    return true;
+  }
+  if (patch.playerCount !== undefined) game.setPlayerCount(settings.playerCount);
+  else if (patch.startingStack !== undefined) game.setStartingStack(settings.startingStack);
+  else if (patch.bigBlind !== undefined) game.setBigBlind(settings.bigBlind);
+  return true;
+}
+
 function isOnline() {
   return inOnlineRoom && game.onlineMode;
 }
 
-async function joinInviteRoom(roomId) {
-  const btn = elements.joinModalSubmit;
+async function joinRoom(roomId, fromModal = false) {
+  const code = normalizeRoomCode(roomId);
+  if (!code) {
+    if (fromModal) setJoinModalError(elements, 'Enter a room code.');
+    else setMessage(elements.message, 'Enter a room code to join.');
+    return;
+  }
+  const btn = fromModal ? elements.joinModalSubmit : elements.joinRoomBtn;
   if (btn) btn.disabled = true;
-  setJoinModalError(elements, '');
+  if (fromModal) setJoinModalError(elements, '');
   try {
-    await network.joinRoom(roomId, getPlayerName(true));
+    await network.joinRoom(code, getPlayerName(fromModal));
     pendingInviteRoomId = null;
+    if (elements.joinRoomCodeInput) elements.joinRoomCodeInput.value = code;
   } catch (err) {
-    setJoinModalError(elements, err.message || 'Could not join room.');
+    const msg = err.message || 'Could not join room.';
+    if (fromModal) setJoinModalError(elements, msg);
+    else setMessage(elements.message, msg);
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+async function joinInviteRoom(roomId) {
+  await joinRoom(roomId, true);
 }
 
 async function sendAction(action, amount = 0) {
@@ -179,24 +229,33 @@ elements.stopReplayBtn.addEventListener('click', () => game.stopReplay());
 elements.playFriendsBtn?.addEventListener('click', () => {
   game.lobbyPanelOpen = true;
   showMultiplayerEntry(elements);
-  setMessage(elements.message, 'Enter your name, then create a room.');
+  setMessage(elements.message, 'Enter your name, then create or join a room.');
   elements.multiplayerPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   renderGame(game, elements);
 });
 
 elements.createRoomBtn.addEventListener('click', async () => {
   try {
-    const res = await network.createRoom(getPlayerName());
+    const res = await network.createRoom(getPlayerName(), getTableSettings());
+    const playerCount = game.playerCount;
+    const bigBlind = parseInt(elements.bigBlindSelect.value, 10);
+    const startingStack = parseInt(elements.startingStackSelect.value, 10);
+    const hostName = getPlayerName();
+    const members = [{
+      id: network.socket?.id,
+      name: hostName,
+      isHost: true,
+      seatIndex: 0,
+    }];
+    game.startingStack = startingStack;
+    game.setOnlinePlayers(members, playerCount);
     renderLobby(elements, {
       roomId: res.roomId,
       isHost: true,
       inviteLink: res.inviteLink,
       message: 'Room created! Share the link with friends.',
-      settings: {
-        playerCount: parseInt(elements.playerCountSelect.value, 10),
-        bigBlind: parseInt(elements.bigBlindSelect.value, 10),
-      },
-      members: [{ name: getPlayerName(), isHost: true, seatIndex: 0 }],
+      settings: { playerCount, bigBlind, startingStack },
+      members,
     });
     inOnlineRoom = true;
     game.onlineMode = true;
@@ -211,33 +270,46 @@ elements.createRoomBtn.addEventListener('click', async () => {
 });
 
 elements.joinRoomBtn.addEventListener('click', async () => {
-  const roomId = getRoomFromUrl();
-  if (!roomId) {
-    setMessage(elements.message, 'Open a friend\'s invite link, or add ?room=CODE to the URL.');
+  const code = normalizeRoomCode(elements.joinRoomCodeInput?.value) || getRoomFromUrl();
+  if (!code) {
+    showJoinModal(elements, '', { invited: false });
     return;
   }
-  try {
-    await network.joinRoom(roomId, getPlayerName());
-  } catch (err) {
-    setMessage(elements.message, err.message);
+  await joinRoom(code, false);
+});
+
+elements.joinRoomCodeInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    elements.joinRoomBtn?.click();
   }
 });
 
 elements.joinModalSubmit?.addEventListener('click', () => {
-  if (pendingInviteRoomId) joinInviteRoom(pendingInviteRoomId);
+  const code = normalizeRoomCode(elements.joinModalRoomInput?.value) || pendingInviteRoomId;
+  joinInviteRoom(code);
 });
 
 elements.joinModalCancel?.addEventListener('click', () => {
   hideJoinModal(elements);
   pendingInviteRoomId = null;
+  if (elements.joinModalRoomInput) elements.joinModalRoomInput.readOnly = false;
   clearRoomFromUrl();
   setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
 });
 
 elements.joinModalName?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && pendingInviteRoomId) {
+  if (e.key === 'Enter') {
     e.preventDefault();
-    joinInviteRoom(pendingInviteRoomId);
+    const code = normalizeRoomCode(elements.joinModalRoomInput?.value) || pendingInviteRoomId;
+    joinInviteRoom(code);
+  }
+});
+
+elements.joinModalRoomInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    elements.joinModalName?.focus();
   }
 });
 
@@ -268,23 +340,36 @@ elements.copyLinkBtn.addEventListener('click', async () => {
   }
 });
 
-elements.playerCountSelect.addEventListener('change', async (e) => {
+elements.addBotBtn?.addEventListener('click', async () => {
   if (isOnline() && game.isHost) {
-    await network.updateSettings({
-      playerCount: parseInt(e.target.value, 10),
-      bigBlind: parseInt(elements.bigBlindSelect.value, 10),
-    });
+    if (!game.canAddBot()) return;
+    await pushTableSettings({ playerCount: game.playerCount + 1 });
     return;
   }
-  game.setPlayerCount(parseInt(e.target.value, 10));
+  game.addBot();
+});
+
+elements.removeBotBtn?.addEventListener('click', async () => {
+  if (isOnline() && game.isHost) {
+    if (!game.canRemoveBot()) return;
+    await pushTableSettings({ playerCount: game.playerCount - 1 });
+    return;
+  }
+  game.removeBot();
+});
+
+elements.startingStackSelect?.addEventListener('change', async (e) => {
+  const stack = parseInt(e.target.value, 10);
+  if (isOnline() && game.isHost) {
+    await pushTableSettings({ startingStack: stack });
+    return;
+  }
+  game.setStartingStack(stack);
 });
 
 elements.bigBlindSelect.addEventListener('change', async (e) => {
   if (isOnline() && game.isHost) {
-    await network.updateSettings({
-      playerCount: parseInt(elements.playerCountSelect.value, 10),
-      bigBlind: parseInt(e.target.value, 10),
-    });
+    await pushTableSettings({ bigBlind: parseInt(e.target.value, 10) });
     return;
   }
   game.setBigBlind(parseInt(e.target.value, 10));
@@ -368,7 +453,7 @@ renderGame(game, elements);
 const roomFromUrl = getRoomFromUrl();
 if (roomFromUrl) {
   pendingInviteRoomId = roomFromUrl;
-  showJoinModal(elements, roomFromUrl);
+  showJoinModal(elements, roomFromUrl, { invited: true });
 } else {
   setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
 }

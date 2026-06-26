@@ -51,9 +51,9 @@ export class NetworkClient {
     });
   }
 
-  async createRoom(name) {
+  async createRoom(name, settings) {
     await this.connect();
-    const res = await this.emit('create-room', { name });
+    const res = await this.emit('create-room', { name, settings });
     if (!res.ok) throw new Error(res.error || 'Could not create room.');
     this.roomId = res.roomId;
     this.isHost = res.isHost;
@@ -98,6 +98,10 @@ export class NetworkClient {
     this.socket = null;
     this.connected = false;
   }
+}
+
+export function normalizeRoomCode(raw) {
+  return String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
 }
 
 export function getRoomFromUrl() {

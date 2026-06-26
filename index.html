@@ -68,13 +68,20 @@
     </div>
 
     <div id="setup-bar" class="setup-bar">
-      <label class="setup-label" for="player-count">Players</label>
-      <select id="player-count" class="setup-select">
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4" selected>4</option>
-        <option value="5">5</option>
-        <option value="6">6</option>
+      <div class="bot-stepper" aria-label="Bot count">
+        <span class="setup-label">Bots</span>
+        <button id="btn-remove-bot" class="btn-stepper" type="button" aria-label="Remove bot">−</button>
+        <span id="bot-count" class="bot-count">3</span>
+        <button id="btn-add-bot" class="btn-stepper" type="button" aria-label="Add bot">+</button>
+      </div>
+      <span id="table-size-hint" class="setup-hint">4 players</span>
+      <label class="setup-label" for="starting-stack">Stack</label>
+      <select id="starting-stack" class="setup-select">
+        <option value="500">$500</option>
+        <option value="1000" selected>$1,000</option>
+        <option value="2000">$2,000</option>
+        <option value="5000">$5,000</option>
+        <option value="10000">$10,000</option>
       </select>
       <label class="setup-label" for="big-blind">Big Blind</label>
       <select id="big-blind" class="setup-select">
@@ -101,11 +108,13 @@
       </div>
       <div id="lobby-entry" class="lobby-entry">
         <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
+        <input type="text" id="join-room-code" class="lobby-input lobby-code-input" placeholder="Room code" maxlength="6" autocapitalize="characters" spellcheck="false">
         <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
-        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join from Link</button>
+        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join Room</button>
       </div>
       <div id="lobby-active" class="lobby-active hidden">
         <p class="lobby-hint" id="lobby-hint">Share the link with friends.</p>
+        <p id="lobby-table-settings" class="lobby-table-settings"></p>
         <div class="lobby-code">Room: <strong id="lobby-room-code">—</strong></div>
         <div class="invite-row">
           <input type="text" id="invite-link" class="invite-link" readonly>
@@ -123,9 +132,10 @@
 
   <div id="join-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="join-modal-title">
     <div class="join-modal-card">
-      <h2 id="join-modal-title">Join friend's game</h2>
-      <p class="join-modal-sub">You've been invited to a poker table.</p>
-      <p class="join-modal-room">Room <strong id="join-modal-room-code">—</strong></p>
+      <h2 id="join-modal-title">Join a game</h2>
+      <p id="join-modal-sub" class="join-modal-sub">Enter the room code from your friend.</p>
+      <label class="join-modal-label" for="join-modal-room">Room code</label>
+      <input type="text" id="join-modal-room" class="join-modal-input join-modal-code" placeholder="e.g. ABC123" maxlength="6" autocapitalize="characters" spellcheck="false">
       <label class="join-modal-label" for="join-modal-name">Your name</label>
       <input type="text" id="join-modal-name" class="join-modal-input" placeholder="Enter your name" maxlength="16" autocomplete="nickname">
       <p id="join-modal-error" class="join-modal-error hidden"></p>

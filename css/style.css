@@ -512,6 +512,46 @@ header h1 {
   cursor: not-allowed;
 }
 
+.bot-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-stepper {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-stepper:hover:not(:disabled) {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.btn-stepper:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bot-count {
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.setup-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .setup-option {
   display: flex;
   align-items: center;
@@ -565,6 +605,14 @@ header h1 {
   min-width: 140px;
 }
 
+.lobby-code-input {
+  min-width: 100px;
+  max-width: 120px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
 .btn-multiplayer {
   background: var(--gold);
   color: var(--black);
@@ -615,6 +663,12 @@ header h1 {
 .lobby-hint {
   font-size: 0.85rem;
   color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.lobby-table-settings {
+  font-size: 0.85rem;
+  color: var(--text);
   margin-bottom: 0.5rem;
 }
 
@@ -735,6 +789,17 @@ header h1 {
 .join-modal-input:focus {
   outline: none;
   border-color: var(--gold);
+}
+
+.join-modal-code {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.join-modal-input[readonly] {
+  opacity: 0.85;
+  cursor: default;
 }
 
 .join-modal-error {

@@ -20,8 +20,9 @@ app.use(express.static(rootDir));
 const rooms = new RoomManager(io);
 
 io.on('connection', (socket) => {
-  socket.on('create-room', ({ name }, cb) => {
+  socket.on('create-room', ({ name, settings }, cb) => {
     const room = rooms.create(socket, name);
+    if (settings) room.updateSettings(socket.id, settings);
     const link = room.getInviteLink(socket);
     cb?.({
       ok: true,
@@ -48,14 +49,14 @@ io.on('connection', (socket) => {
     cb?.({ ok: true, ...result, inviteLink: link });
   });
 
-  socket.on('update-settings', ({ playerCount, bigBlind }, cb) => {
+  socket.on('update-settings', ({ playerCount, bigBlind, startingStack }, cb) => {
     const room = rooms.get(socket.data.roomId);
     if (!room) {
       cb?.({ ok: false, error: 'Not in a room.' });
       return;
     }
-    const ok = room.updateSettings(socket.id, { playerCount, bigBlind });
-    cb?.({ ok });
+    const ok = room.updateSettings(socket.id, { playerCount, bigBlind, startingStack });
+    cb?.({ ok, error: ok ? undefined : 'Could not update table settings.' });
   });
 
   socket.on('start-hand', (_, cb) => {

@@ -142,22 +142,37 @@ function getSeatPosition(index, total) {
   };
 }
 
-export function showJoinModal(elements, roomId) {
-  const { joinModal, joinModalRoomCode, joinModalName, joinModalError } = elements;
+export function showJoinModal(elements, roomId = '', { invited = false } = {}) {
+  const {
+    joinModal, joinModalRoomInput, joinModalName, joinModalError,
+    joinModalTitle, joinModalSub,
+  } = elements;
   if (!joinModal) return;
-  if (joinModalRoomCode) joinModalRoomCode.textContent = roomId;
+  if (joinModalRoomInput) {
+    joinModalRoomInput.value = roomId || '';
+    joinModalRoomInput.readOnly = invited;
+  }
+  if (joinModalTitle) {
+    joinModalTitle.textContent = invited ? "Join friend's game" : 'Join a game';
+  }
+  if (joinModalSub) {
+    joinModalSub.textContent = invited
+      ? "You've been invited to a poker table."
+      : 'Enter the room code from your friend.';
+  }
   if (joinModalError) {
     joinModalError.textContent = '';
     joinModalError.classList.add('hidden');
   }
   joinModal.classList.remove('hidden');
   document.body.classList.add('modal-open', 'invite-join-pending');
-  joinModalName?.focus();
+  (invited ? joinModalName : joinModalRoomInput)?.focus();
 }
 
 export function hideJoinModal(elements) {
   elements.joinModal?.classList.add('hidden');
   document.body.classList.remove('modal-open', 'invite-join-pending');
+  if (elements.joinModalRoomInput) elements.joinModalRoomInput.readOnly = false;
   if (elements.joinModalError) {
     elements.joinModalError.textContent = '';
     elements.joinModalError.classList.add('hidden');
@@ -199,11 +214,19 @@ export function renderLobby(elements, lobby) {
     `).join('');
   }
 
-  if (elements.playerCountSelect && lobby.settings) {
-    elements.playerCountSelect.value = String(lobby.settings.playerCount);
+  if (elements.startingStackSelect && lobby.settings?.startingStack) {
+    elements.startingStackSelect.value = String(lobby.settings.startingStack);
   }
   if (elements.bigBlindSelect && lobby.settings) {
     elements.bigBlindSelect.value = String(lobby.settings.bigBlind);
+  }
+
+  if (elements.lobbyTableSettings && lobby.settings) {
+    const humans = lobby.members.length;
+    const bots = Math.max(0, lobby.settings.playerCount - humans);
+    const stack = lobby.settings.startingStack ?? 1000;
+    elements.lobbyTableSettings.textContent =
+      `${lobby.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${lobby.settings.bigBlind} BB`;
   }
 }
 
@@ -277,6 +300,7 @@ function renderPlayers(game, el) {
     const faceDown = !showCards || (folded && !(game.showBotHandsAtEnd && game.handsRevealed));
     const peekFolded = (game.onlineMode ? i === game.localSeatIndex : p.isHuman) && folded && faceDown;
     const youTag = game.onlineMode && i === game.localSeatIndex ? ' (you)' : '';
+    const displayName = game.onlineMode ? game.getSeatDisplayName(i) : p.name;
 
     const cards = p.hole.length
       ? p.hole.map(c => peekFolded ? peekCardHTML(c) : cardHTML(c, faceDown)).join('')
@@ -286,7 +310,7 @@ function renderPlayers(game, el) {
       ${isDealer ? '<span class="dealer-button">D</span>' : ''}
       <div class="player-cards">${cards}</div>
       <div class="player-info">
-        <span class="player-name">${p.name}${youTag}</span>
+        <span class="player-name">${displayName}${youTag}</span>
         <span class="player-chips">${game.formatAmount(p.chips)}</span>
         ${p.bet > 0 ? `<span class="player-bet">Bet: ${game.formatAmount(p.bet)}</span>` : ''}
         ${folded ? '<span class="player-status">Folded</span>' : ''}
@@ -319,11 +343,13 @@ function renderPhase(game, el) {
 function renderControls(game, elements) {
   const {
     controls, foldBtn, checkBtn, callBtn, raiseBtn, raiseSlider, raiseInput,
-    allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, playerCountSelect, bigBlindSelect,
+    allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, bigBlindSelect,
+    startingStackSelect, addBotBtn, removeBotBtn, botCountLabel, tableSizeHint,
     setupBar, skipBar, skipBtn, displayModeBar, displayDollarsBtn, displayBBBtn,
   } = elements;
   const canConfigure = game.canChangeSettings();
   const inMatch = game.phase !== 'idle' && !game.replaying;
+  const hostOrSolo = !game.onlineMode || game.isHost;
 
   if (displayModeBar) displayModeBar.classList.toggle('hidden', !inMatch);
   if (displayDollarsBtn) displayDollarsBtn.classList.toggle('active', !game.showInBB);
@@ -339,13 +365,22 @@ function renderControls(game, elements) {
   }
   if (skipBar) skipBar.classList.toggle('hidden', !game.canSkipHand());
   if (skipBtn) skipBtn.disabled = game.fastForward;
-  if (playerCountSelect) {
-    playerCountSelect.value = String(game.playerCount);
-    playerCountSelect.disabled = !canConfigure || (game.onlineMode && !game.isHost);
+
+  const configDisabled = !canConfigure || !hostOrSolo;
+  if (botCountLabel) botCountLabel.textContent = String(game.getBotCount());
+  if (tableSizeHint) {
+    const humans = game.getHumanCount();
+    tableSizeHint.textContent = `${game.playerCount} players (${humans} human${humans === 1 ? '' : 's'})`;
+  }
+  if (addBotBtn) addBotBtn.disabled = configDisabled || !game.canAddBot();
+  if (removeBotBtn) removeBotBtn.disabled = configDisabled || !game.canRemoveBot();
+  if (startingStackSelect) {
+    startingStackSelect.value = String(game.startingStack);
+    startingStackSelect.disabled = configDisabled;
   }
   if (bigBlindSelect) {
     bigBlindSelect.value = String(game.bigBlind);
-    bigBlindSelect.disabled = !canConfigure || (game.onlineMode && !game.isHost);
+    bigBlindSelect.disabled = configDisabled;
   }
 
   const isTurn = game.isHumanTurn();

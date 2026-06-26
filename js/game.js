@@ -2,6 +2,10 @@ import { createDeck, shuffle, evaluateHand, compareHands, handName, formatHoleCa
 import { decideAction, AI_PERSONALITIES } from './ai.js';
 
 const STARTING_CHIPS = 1000;
+export const MAX_TABLE_SIZE = 8;
+export const MIN_TABLE_SIZE = 2;
+export const DEFAULT_STARTING_STACK = 1000;
+export const STARTING_STACK_OPTIONS = [500, 1000, 2000, 5000, 10000];
 export const BIG_BLIND_OPTIONS = [5, 10, 20, 25, 50, 100];
 
 function createBettingLine() {
@@ -28,6 +32,7 @@ export class PokerGame {
     this.onMessage = onMessage;
     this.playerCount = 4;
     this.bigBlind = 20;
+    this.startingStack = DEFAULT_STARTING_STACK;
     this.dealerIndex = 0;
     this.resetPlayers();
     this.phase = 'idle';
@@ -58,17 +63,64 @@ export class PokerGame {
     this.localSeatIndex = 0;
     this.isHost = false;
     this._lastMessage = '';
+    this.roomMembers = new Map();
+  }
+
+  setRoomMembers(members) {
+    this.roomMembers = new Map((members || []).map(m => [m.seatIndex, m]));
+  }
+
+  getSeatDisplayName(seatIndex) {
+    const member = this.roomMembers.get(seatIndex);
+    if (member?.name) return member.name;
+    return this.players[seatIndex]?.name ?? 'Player';
+  }
+
+  getHumanCount() {
+    if (this.onlineMode) return this.roomMembers.size;
+    return 1;
+  }
+
+  getBotCount() {
+    return Math.max(0, this.playerCount - this.getHumanCount());
+  }
+
+  getMinPlayerCount() {
+    return Math.max(MIN_TABLE_SIZE, this.getHumanCount());
+  }
+
+  canAddBot() {
+    if (!this.canChangeSettings()) return false;
+    return this.playerCount < MAX_TABLE_SIZE;
+  }
+
+  canRemoveBot() {
+    if (!this.canChangeSettings()) return false;
+    return this.playerCount > this.getMinPlayerCount();
+  }
+
+  addBot() {
+    if (!this.canAddBot()) return false;
+    return this.setPlayerCount(this.playerCount + 1);
+  }
+
+  removeBot() {
+    if (!this.canRemoveBot()) return false;
+    return this.setPlayerCount(this.playerCount - 1);
   }
 
   setOnlinePlayers(members, playerCount) {
     this.playerCount = playerCount;
     this.onlineMode = true;
+    this.setRoomMembers(members);
     const bySeat = new Map(members.map(m => [m.seatIndex, m]));
     const prev = this.players;
+    const inLobby = this.phase === 'idle' || this.phase === 'showdown';
+    const stack = this.startingStack ?? DEFAULT_STARTING_STACK;
     this.players = [];
     for (let i = 0; i < playerCount; i++) {
       const member = bySeat.get(i);
-      const chips = prev[i]?.chips ?? STARTING_CHIPS;
+      const chips = inLobby ? stack : (prev[i]?.chips ?? stack);
       if (member) {
         this.players.push({
           id: i,
@@ -108,6 +160,7 @@ export class PokerGame {
     return {
       playerCount: this.playerCount,
       bigBlind: this.bigBlind,
+      startingStack: this.startingStack,
       dealerIndex: this.dealerIndex,
       phase: this.phase,
       community: cloneCards(this.community),
@@ -138,6 +191,7 @@ export class PokerGame {
     this.isHost = !!state.isHost;
     this.playerCount = state.playerCount;
     this.bigBlind = state.bigBlind;
+    if (state.startingStack) this.startingStack = state.startingStack;
     this.dealerIndex = state.dealerIndex;
     this.phase = state.phase;
     this.community = cloneCards(state.community || []);
@@ -149,11 +203,13 @@ export class PokerGame {
     this.handsRevealed = !!state.handsRevealed;
     this.actedThisRound = new Set(state.actedThisRound || []);
     this._lastMessage = state.message || '';
+    if (state.members?.length) this.setRoomMembers(state.members);
     this.players = (state.players || []).map((p, i) => {
       const existing = this.players[i];
+      const memberName = this.roomMembers.get(i)?.name;
       return {
         id: p.id,
-        name: p.name,
+        name: memberName || p.name,
         isHuman: p.isHuman,
         personality: existing?.personality,
         chips: p.chips,
@@ -181,27 +237,47 @@ export class PokerGame {
   }
 
   resetPlayers() {
+    this.roomMembers = new Map();
+    const stack = this.startingStack ?? DEFAULT_STARTING_STACK;
     const aiCount = this.playerCount - 1;
     this.players = [
-      { id: 0, name: 'You', isHuman: true, chips: STARTING_CHIPS, hole: [], bet: 0, folded: false, inHand: true },
-      ...AI_PERSONALITIES.slice(0, aiCount).map((p, i) => ({
-        id: i + 1, name: p.name, isHuman: false, personality: p,
-        chips: STARTING_CHIPS, hole: [], bet: 0, folded: false, inHand: true,
-      })),
+      { id: 0, name: 'You', isHuman: true, chips: stack, hole: [], bet: 0, folded: false, inHand: true },
+      ...Array.from({ length: aiCount }, (_, i) => {
+        const p = AI_PERSONALITIES[i % AI_PERSONALITIES.length];
+        return {
+          id: i + 1, name: p.name, isHuman: false, personality: p,
+          chips: stack, hole: [], bet: 0, folded: false, inHand: true,
+        };
+      }),
     ];
   }
 
   setPlayerCount(count) {
     if (this.onlineMode) return false;
     if (this.phase !== 'idle' && this.phase !== 'showdown') return false;
-    this.playerCount = Math.max(2, Math.min(6, count));
+    this.playerCount = Math.max(MIN_TABLE_SIZE, Math.min(MAX_TABLE_SIZE, count));
     this.dealerIndex = 0;
     this.community = [];
     this.pot = 0;
     this.handHistory = [];
     this.phase = 'idle';
     this.resetPlayers();
-    this.onMessage(`Table set to ${this.playerCount} players.`);
+    const bots = this.getBotCount();
+    this.onMessage(bots > 0
+      ? `Table set to ${this.playerCount} players (${bots} bot${bots === 1 ? '' : 's'}).`
+      : `Table set to ${this.playerCount} players.`);
+    this.onUpdate();
+    return true;
+  }
+
+  setStartingStack(amount) {
+    if (this.onlineMode) return false;
+    if (this.phase !== 'idle' && this.phase !== 'showdown') return false;
+    const stack = parseInt(amount, 10);
+    if (!Number.isFinite(stack) || stack < 100 || stack > 100000) return false;
+    this.startingStack = stack;
+    for (const p of this.players) p.chips = stack;
+    this.onMessage(`Starting stack set to ${this.formatAmount(stack)}.`);
     this.onUpdate();
     return true;
   }

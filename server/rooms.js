@@ -43,14 +43,17 @@ class Room {
     this.io = io;
     this.members = new Map();
     this.status = 'lobby';
-    this.settings = { playerCount: 4, bigBlind: 20 };
+    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000 };
     this.game = null;
     this.message = 'Waiting for players…';
   }
 
   addMember(socket, name, isHost = false) {
     const displayName = String(name || 'Player').trim().slice(0, 16) || 'Player';
-    if (this.members.size >= 6) return { ok: false, error: 'Room is full.' };
+    if (this.members.size >= 8) return { ok: false, error: 'Room is full.' };
+    if (this.members.size >= this.settings.playerCount) {
+      return { ok: false, error: 'All seats are taken. Ask the host to add a seat.' };
+    }
     if (this.status !== 'lobby') return { ok: false, error: 'Game already in progress.' };
 
     const seatIndex = this.members.size;
@@ -110,11 +113,23 @@ class Room {
 
   updateSettings(socketId, settings) {
     if (socketId !== this.hostId || this.status !== 'lobby') return false;
-    const playerCount = Math.max(2, Math.min(6, parseInt(settings.playerCount, 10) || 4));
+    const humanCount = this.members.size;
+    let playerCount = parseInt(settings.playerCount, 10) || 4;
+    playerCount = Math.max(2, Math.min(8, playerCount));
+    if (playerCount < humanCount) return false;
     const bigBlind = parseInt(settings.bigBlind, 10) || 20;
+    const startingStack = Math.max(100, Math.min(100000, parseInt(settings.startingStack, 10) || 1000));
+    if (playerCount < humanCount) return false;
     this.settings.playerCount = playerCount;
     this.settings.bigBlind = bigBlind;
-    if (this.members.size > playerCount) return false;
+    this.settings.startingStack = startingStack;
+    if (this.game) {
+      this.game.startingStack = startingStack;
+      this.syncGamePlayers();
+      if (this.status === 'lobby') {
+        for (const p of this.game.players) p.chips = startingStack;
+      }
+    }
     this.broadcastLobby();
     return true;
   }
@@ -151,15 +166,20 @@ class Room {
     this.game.onlineMode = true;
     this.game.playerCount = this.settings.playerCount;
     this.game.bigBlind = this.settings.bigBlind;
+    this.game.startingStack = this.settings.startingStack;
     this.game.minRaise = this.settings.bigBlind;
     this.syncGamePlayers();
   }
 
   syncGamePlayers() {
     const members = [...this.members.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+    this.game.startingStack = this.settings.startingStack;
     this.game.setOnlinePlayers(members, this.settings.playerCount);
     this.game.bigBlind = this.settings.bigBlind;
     this.game.minRaise = this.settings.bigBlind;
+    if (this.status === 'lobby') {
+      for (const p of this.game.players) p.chips = this.settings.startingStack;
+    }
   }
 
   handleAction(socketId, action, amount = 0) {
