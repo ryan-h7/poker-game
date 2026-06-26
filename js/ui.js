@@ -125,6 +125,12 @@ export function syncRaiseInputFromChips(game, elements, amount) {
   return updateRaiseFromChips(game, elements, amount, { syncInput: true });
 }
 
+function getViewSeatIndex(game, seatIndex) {
+  const total = game.players.length;
+  const pivot = game.onlineMode ? game.localSeatIndex : 0;
+  return (seatIndex - pivot + total) % total;
+}
+
 function getSeatPosition(index, total) {
   const angle = (Math.PI / 2) + (index * 2 * Math.PI) / total;
   const x = 50 + 38 * Math.cos(angle);
@@ -230,7 +236,8 @@ function renderCommunity(game, el) {
 
 function renderPlayers(game, el) {
   el.innerHTML = game.players.map((p, i) => {
-    const pos = getSeatPosition(i, game.players.length);
+    const viewIndex = getViewSeatIndex(game, i);
+    const pos = getSeatPosition(viewIndex, game.players.length);
     const style = Object.entries(pos).map(([k, v]) => `${k}: ${v}`).join(';');
     const isActive = game.players[game.activeIndex]?.id === p.id &&
       game.phase !== 'idle' && game.phase !== 'showdown';
