@@ -66,6 +66,8 @@ export class PokerGame {
     this.roomMembers = new Map();
     this.roomStatus = 'lobby';
     this.roomId = null;
+    this.inviteLink = '';
+    this.tableDetailsOpen = false;
   }
 
   setRoomMembers(members) {
@@ -212,6 +214,7 @@ export class PokerGame {
     this._lastMessage = state.message || '';
     if (state.status) this.roomStatus = state.status;
     if (state.roomId) this.roomId = state.roomId;
+    if (state.inviteLink) this.inviteLink = state.inviteLink;
     if (state.members?.length) this.setRoomMembers(state.members);
     this.players = (state.players || []).map((p, i) => {
       const existing = this.players[i];

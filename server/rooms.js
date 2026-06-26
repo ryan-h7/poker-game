@@ -100,21 +100,16 @@ class Room {
     const member = this.members.get(socketId);
     if (!member) return;
 
+    const leftName = member.name;
+    const wasHost = socketId === this.hostId;
     this.members.delete(socketId);
     if (this.members.size === 0) return;
 
-    if (socketId === this.hostId) {
-      this.hostId = this.members.keys().next().value;
-      const newHost = this.members.get(this.hostId);
-      if (newHost) newHost.isHost = true;
-    }
+    if (wasHost) this.transferHost(leftName);
+    else this.message = `${leftName} left the table.`;
 
     if (this.status === 'lobby') {
-      let i = 0;
-      for (const m of this.members.values()) {
-        m.seatIndex = i++;
-      }
-      this.message = `${member.name} left the table.`;
+      this.reindexMembers();
       this.syncTable();
       return;
     }
@@ -130,10 +125,19 @@ class Room {
       } else {
         this.reindexMembers();
         this.syncGamePlayers();
-        this.message = `${member.name} left the table.`;
         this.broadcastGameState();
       }
     }
+  }
+
+  transferHost(leftName) {
+    for (const m of this.members.values()) m.isHost = false;
+    const sorted = [...this.members.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+    const newHost = sorted[0];
+    if (!newHost) return;
+    this.hostId = newHost.id;
+    newHost.isHost = true;
+    this.message = `${leftName} left. ${newHost.name} is now the host.`;
   }
 
   reindexMembers() {
@@ -293,6 +297,8 @@ class Room {
         seatIndex: m.seatIndex,
         isHost: m.id === this.hostId,
       }));
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) state.inviteLink = this.getInviteLink(socket);
       this.io.to(socketId).emit('game-state', state);
     }
   }

@@ -490,22 +490,72 @@ header h1 {
   order: 5;
 }
 
-.session-bar {
+.online-toolbar {
   grid-column: 1;
   justify-self: center;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   order: 6;
+}
+
+.online-toolbar.hidden { display: none; }
+
+.btn-table-details {
+  background: #1f2d3d;
+  color: #58a6ff;
+  border: 1px solid #58a6ff66;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  font-weight: 600;
   font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.session-bar.hidden { display: none; }
+.btn-table-details:hover {
+  border-color: #58a6ff;
+}
 
-.session-room strong {
+.table-details-panel {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  order: 7;
+  max-width: 520px;
+  justify-self: center;
+  width: 100%;
+}
+
+.table-details-panel.hidden { display: none; }
+
+.table-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.table-details-header h2 {
+  font-size: 1rem;
   color: var(--gold);
-  letter-spacing: 0.06em;
+  margin: 0;
 }
+
+.btn-close-details {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.btn-close-details:hover { color: var(--text); }
 
 .setup-bar {
   grid-column: 1;
@@ -601,6 +651,12 @@ header h1 {
 }
 
 .multiplayer-panel.hidden { display: none; }
+
+.multiplayer-title {
+  font-size: 1rem;
+  color: var(--gold);
+  margin: 0 0 0.75rem;
+}
 
 .multiplayer-header {
   display: flex;

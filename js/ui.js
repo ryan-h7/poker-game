@@ -185,28 +185,28 @@ export function setJoinModalError(elements, message) {
   elements.joinModalError.classList.toggle('hidden', !message);
 }
 
-export function renderLobby(elements, lobby) {
+export function renderTableDetails(elements, info) {
+  if (!info) return;
   const {
-    multiplayerPanel, lobbyEntry, lobbyActive, lobbyRoomCode, lobbyPlayers,
-    inviteLinkInput, createRoomBtn, joinRoomBtn, lobbyHint, leaveRoomBtn,
+    lobbyRoomCode, lobbyPlayers, inviteLinkInput, lobbyHint, lobbyTableSettings,
   } = elements;
-  if (!multiplayerPanel || !lobby) return;
 
-  multiplayerPanel.classList.remove('hidden');
-  lobbyEntry?.classList.add('hidden');
-  lobbyActive?.classList.remove('hidden');
-  leaveRoomBtn?.classList.remove('hidden');
-
-  if (lobbyRoomCode) lobbyRoomCode.textContent = lobby.roomId;
-  if (inviteLinkInput && lobby.inviteLink) inviteLinkInput.value = lobby.inviteLink;
+  if (lobbyRoomCode) lobbyRoomCode.textContent = info.roomId || '—';
+  if (inviteLinkInput && info.inviteLink) inviteLinkInput.value = info.inviteLink;
   if (lobbyHint) {
-    lobbyHint.textContent = lobby.isHost
-      ? 'Share the link below. Start when at least 2 players have joined.'
-      : 'Waiting for the host to deal…';
+    if (info.status === 'lobby') {
+      lobbyHint.textContent = info.isHost
+        ? 'Share the link below. Deal when at least 2 players have joined.'
+        : 'Waiting for the host to deal…';
+    } else if (info.isHost) {
+      lobbyHint.textContent = 'You are the host — deal the next hand when ready.';
+    } else {
+      lobbyHint.textContent = 'Waiting for the host to deal the next hand…';
+    }
   }
 
-  if (lobbyPlayers) {
-    lobbyPlayers.innerHTML = lobby.members.map(m => `
+  if (lobbyPlayers && info.members) {
+    lobbyPlayers.innerHTML = info.members.map(m => `
       <li class="lobby-player">
         <span>${m.name}${m.isHost ? ' (host)' : ''}</span>
         <span class="lobby-seat">Seat ${m.seatIndex + 1}</span>
@@ -214,20 +214,32 @@ export function renderLobby(elements, lobby) {
     `).join('');
   }
 
-  if (elements.startingStackSelect && lobby.settings?.startingStack) {
-    elements.startingStackSelect.value = String(lobby.settings.startingStack);
+  if (elements.startingStackSelect && info.settings?.startingStack) {
+    elements.startingStackSelect.value = String(info.settings.startingStack);
   }
-  if (elements.bigBlindSelect && lobby.settings) {
-    elements.bigBlindSelect.value = String(lobby.settings.bigBlind);
+  if (elements.bigBlindSelect && info.settings?.bigBlind) {
+    elements.bigBlindSelect.value = String(info.settings.bigBlind);
   }
 
-  if (elements.lobbyTableSettings && lobby.settings) {
-    const humans = lobby.members.length;
-    const bots = Math.max(0, lobby.settings.playerCount - humans);
-    const stack = lobby.settings.startingStack ?? 1000;
-    elements.lobbyTableSettings.textContent =
-      `${lobby.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${lobby.settings.bigBlind} BB`;
+  if (lobbyTableSettings && info.settings && info.members) {
+    const humans = info.members.length;
+    const bots = Math.max(0, info.settings.playerCount - humans);
+    const stack = info.settings.startingStack ?? 1000;
+    lobbyTableSettings.textContent =
+      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB`;
   }
+}
+
+/** @deprecated use renderTableDetails */
+export function renderLobby(elements, lobby) {
+  renderTableDetails(elements, {
+    roomId: lobby.roomId,
+    isHost: lobby.isHost,
+    inviteLink: lobby.inviteLink,
+    members: lobby.members,
+    settings: lobby.settings,
+    status: lobby.status,
+  });
 }
 
 export function hideMultiplayerPanel(elements) {
@@ -237,11 +249,26 @@ export function hideMultiplayerPanel(elements) {
 export function showMultiplayerEntry(elements) {
   elements.multiplayerPanel?.classList.remove('hidden');
   elements.lobbyEntry?.classList.remove('hidden');
-  elements.lobbyActive?.classList.add('hidden');
-  elements.leaveRoomBtn?.classList.add('hidden');
   elements.lobbyRoomCode && (elements.lobbyRoomCode.textContent = '—');
   elements.lobbyPlayers && (elements.lobbyPlayers.innerHTML = '');
   elements.inviteLinkInput && (elements.inviteLinkInput.value = '');
+}
+
+export function buildTableInfo(game) {
+  if (!game.onlineMode || !game.roomId) return null;
+  const members = [...game.roomMembers.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+  return {
+    roomId: game.roomId,
+    isHost: game.isHost,
+    inviteLink: game.inviteLink,
+    members,
+    settings: {
+      playerCount: game.playerCount,
+      bigBlind: game.bigBlind,
+      startingStack: game.startingStack,
+    },
+    status: game.roomStatus,
+  };
 }
 
 export function renderGame(game, elements) {
@@ -251,6 +278,8 @@ export function renderGame(game, elements) {
   renderControls(game, elements);
   renderLog(game, elements.log, elements.message);
   renderPhase(game, elements.phase);
+  const tableInfo = buildTableInfo(game);
+  if (tableInfo) renderTableDetails(elements, tableInfo);
   if (elements.stopReplayBtn) {
     elements.stopReplayBtn.classList.toggle('hidden', !game.replaying);
   }
@@ -397,18 +426,23 @@ function renderControls(game, elements) {
 
   const isTurn = game.isHumanTurn();
 
-  if (elements.sessionBar) {
-    const showSession = game.onlineMode && game.roomStatus === 'active';
-    elements.sessionBar.classList.toggle('hidden', !showSession);
-    if (elements.sessionRoomCode && game.roomId) {
-      elements.sessionRoomCode.textContent = game.roomId;
-    }
+  if (elements.onlineToolbar) {
+    const showToolbar = game.onlineMode && !!game.roomId;
+    elements.onlineToolbar.classList.toggle('hidden', !showToolbar);
   }
-  if (elements.leaveRoomBtn) elements.leaveRoomBtn.classList.toggle('hidden', !game.onlineMode);
-  const showLobbyPanel = game.lobbyPanelOpen
-    || (game.onlineMode && game.roomStatus === 'lobby');
+  if (elements.tableDetailsPanel) {
+    const showDetails = game.onlineMode && !!game.roomId && game.tableDetailsOpen;
+    elements.tableDetailsPanel.classList.toggle('hidden', !showDetails);
+  }
+  if (elements.tableDetailsBtn) {
+    const open = !!game.tableDetailsOpen;
+    elements.tableDetailsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    elements.tableDetailsBtn.textContent = open ? 'Hide details' : 'Table details';
+  }
+
+  const showFriendsEntry = game.lobbyPanelOpen && !game.onlineMode;
   if (elements.multiplayerPanel) {
-    elements.multiplayerPanel.classList.toggle('hidden', !showLobbyPanel);
+    elements.multiplayerPanel.classList.toggle('hidden', !showFriendsEntry);
   }
   if (elements.playFriendsBtn) {
     elements.playFriendsBtn.classList.toggle('hidden', game.onlineMode);

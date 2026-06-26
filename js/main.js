@@ -2,8 +2,8 @@ import { PokerGame } from './game.js';
 import {
   renderGame, setMessage, setRaiseAmount, getSelectedRaiseAmount,
   raiseDisplayToChips, syncRaiseInputFromChips, updateRaiseFromChips,
-  renderLobby, showMultiplayerEntry, hideMultiplayerPanel,
-  showJoinModal, hideJoinModal, setJoinModalError,
+  showMultiplayerEntry, hideMultiplayerPanel,
+  showJoinModal, hideJoinModal, setJoinModalError, renderTableDetails,
 } from './ui.js';
 import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode } from './network.js';
 
@@ -45,20 +45,20 @@ const elements = {
   stopReplayBtn: document.getElementById('btn-stop-replay'),
   multiplayerPanel: document.getElementById('multiplayer-panel'),
   lobbyEntry: document.getElementById('lobby-entry'),
-  lobbyActive: document.getElementById('lobby-active'),
+  onlineToolbar: document.getElementById('online-toolbar'),
+  tableDetailsPanel: document.getElementById('table-details-panel'),
+  tableDetailsBtn: document.getElementById('btn-table-details'),
+  closeTableDetailsBtn: document.getElementById('btn-close-table-details'),
   playerNameInput: document.getElementById('player-name'),
   joinRoomCodeInput: document.getElementById('join-room-code'),
   createRoomBtn: document.getElementById('btn-create-room'),
   joinRoomBtn: document.getElementById('btn-join-room'),
-  leaveRoomBtn: document.getElementById('btn-leave-room'),
   copyLinkBtn: document.getElementById('btn-copy-link'),
   inviteLinkInput: document.getElementById('invite-link'),
   lobbyRoomCode: document.getElementById('lobby-room-code'),
   lobbyPlayers: document.getElementById('lobby-players'),
   lobbyHint: document.getElementById('lobby-hint'),
   lobbyTableSettings: document.getElementById('lobby-table-settings'),
-  sessionBar: document.getElementById('session-bar'),
-  sessionRoomCode: document.getElementById('session-room-code'),
   leaveSessionBtn: document.getElementById('btn-leave-session'),
   joinModal: document.getElementById('join-modal'),
   joinModalTitle: document.getElementById('join-modal-title'),
@@ -101,7 +101,7 @@ const network = new NetworkClient({
     inOnlineRoom = true;
     game.onlineMode = true;
     game.roomStatus = lobby.status || 'lobby';
-    game.lobbyPanelOpen = game.roomStatus === 'lobby';
+    game.lobbyPanelOpen = false;
     game.isHost = lobby.isHost;
     const me = lobby.members.find(m => m.id === network.socket?.id);
     if (me) {
@@ -112,10 +112,18 @@ const network = new NetworkClient({
     game.bigBlind = lobby.settings.bigBlind;
     game.startingStack = lobby.settings.startingStack ?? 1000;
     game.roomId = lobby.roomId;
+    game.inviteLink = lobby.inviteLink || game.inviteLink;
     game.setOnlinePlayers(lobby.members, lobby.settings.playerCount, true);
     hideJoinModal(elements);
+    renderTableDetails(elements, {
+      roomId: lobby.roomId,
+      isHost: lobby.isHost,
+      inviteLink: lobby.inviteLink,
+      members: lobby.members,
+      settings: lobby.settings,
+      status: lobby.status,
+    });
     if (game.roomStatus === 'lobby') {
-      renderLobby(elements, lobby);
       setMessage(elements.message, lobby.isHost
         ? 'Share the invite link. Deal when everyone has joined.'
         : 'You\'re in the lobby — waiting for the host to deal.');
@@ -130,6 +138,7 @@ const network = new NetworkClient({
     game.localSeatIndex = state.localSeatIndex;
     game.roomStatus = state.status || 'active';
     game.lobbyPanelOpen = false;
+    if (state.inviteLink) game.inviteLink = state.inviteLink;
     if (state.message) setMessage(elements.message, state.message);
     renderGame(game, elements);
   },
@@ -258,19 +267,21 @@ elements.createRoomBtn.addEventListener('click', async () => {
     game.startingStack = startingStack;
     game.setOnlinePlayers(members, playerCount, true);
     game.roomId = res.roomId;
-    renderLobby(elements, {
+    game.inviteLink = res.inviteLink || '';
+    game.tableDetailsOpen = false;
+    renderTableDetails(elements, {
       roomId: res.roomId,
       isHost: true,
       inviteLink: res.inviteLink,
-      message: 'Room created! Share the link with friends.',
-      settings: { playerCount, bigBlind, startingStack },
       members,
+      settings: { playerCount, bigBlind, startingStack },
+      status: 'lobby',
     });
     inOnlineRoom = true;
     game.onlineMode = true;
     game.isHost = true;
     game.roomStatus = 'lobby';
-    game.lobbyPanelOpen = true;
+    game.lobbyPanelOpen = false;
     game.localSeatIndex = 0;
     setMessage(elements.message, 'Room created! Share the invite link.');
     renderGame(game, elements);
@@ -323,8 +334,16 @@ elements.joinModalRoomInput?.addEventListener('keydown', (e) => {
   }
 });
 
-elements.leaveRoomBtn.addEventListener('click', leaveOnlineRoom);
 elements.leaveSessionBtn?.addEventListener('click', leaveOnlineRoom);
+
+function toggleTableDetails(forceOpen) {
+  if (!game.onlineMode || !game.roomId) return;
+  game.tableDetailsOpen = typeof forceOpen === 'boolean' ? forceOpen : !game.tableDetailsOpen;
+  renderGame(game, elements);
+}
+
+elements.tableDetailsBtn?.addEventListener('click', () => toggleTableDetails());
+elements.closeTableDetailsBtn?.addEventListener('click', () => toggleTableDetails(false));
 
 function leaveOnlineRoom() {
   network.leaveRoom();
@@ -333,6 +352,8 @@ function leaveOnlineRoom() {
   game.isHost = false;
   game.lobbyPanelOpen = false;
   game.roomStatus = 'lobby';
+  game.tableDetailsOpen = false;
+  game.inviteLink = '';
   game.phase = 'idle';
   game.resetPlayers();
   hideMultiplayerPanel(elements);
