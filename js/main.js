@@ -57,6 +57,9 @@ const elements = {
   lobbyPlayers: document.getElementById('lobby-players'),
   lobbyHint: document.getElementById('lobby-hint'),
   lobbyTableSettings: document.getElementById('lobby-table-settings'),
+  sessionBar: document.getElementById('session-bar'),
+  sessionRoomCode: document.getElementById('session-room-code'),
+  leaveSessionBtn: document.getElementById('btn-leave-session'),
   joinModal: document.getElementById('join-modal'),
   joinModalTitle: document.getElementById('join-modal-title'),
   joinModalSub: document.getElementById('join-modal-sub'),
@@ -97,7 +100,8 @@ const network = new NetworkClient({
   onLobby: (lobby) => {
     inOnlineRoom = true;
     game.onlineMode = true;
-    game.lobbyPanelOpen = true;
+    game.roomStatus = lobby.status || 'lobby';
+    game.lobbyPanelOpen = game.roomStatus === 'lobby';
     game.isHost = lobby.isHost;
     const me = lobby.members.find(m => m.id === network.socket?.id);
     if (me) {
@@ -107,12 +111,15 @@ const network = new NetworkClient({
     game.playerCount = lobby.settings.playerCount;
     game.bigBlind = lobby.settings.bigBlind;
     game.startingStack = lobby.settings.startingStack ?? 1000;
-    game.setOnlinePlayers(lobby.members, lobby.settings.playerCount);
+    game.roomId = lobby.roomId;
+    game.setOnlinePlayers(lobby.members, lobby.settings.playerCount, true);
     hideJoinModal(elements);
-    renderLobby(elements, lobby);
-    setMessage(elements.message, lobby.isHost
-      ? 'Share the invite link. Deal when everyone has joined.'
-      : 'You\'re in the lobby — waiting for the host to deal.');
+    if (game.roomStatus === 'lobby') {
+      renderLobby(elements, lobby);
+      setMessage(elements.message, lobby.isHost
+        ? 'Share the invite link. Deal when everyone has joined.'
+        : 'You\'re in the lobby — waiting for the host to deal.');
+    }
     renderGame(game, elements);
   },
   onGameState: (state) => {
@@ -121,8 +128,9 @@ const network = new NetworkClient({
     game.applyNetworkState(state);
     game.isHost = state.isHost;
     game.localSeatIndex = state.localSeatIndex;
-    game.lobbyPanelOpen = state.phase === 'idle' || state.phase === 'showdown';
-    setMessage(elements.message, state.message || '');
+    game.roomStatus = state.status || 'active';
+    game.lobbyPanelOpen = false;
+    if (state.message) setMessage(elements.message, state.message);
     renderGame(game, elements);
   },
 });
@@ -248,7 +256,8 @@ elements.createRoomBtn.addEventListener('click', async () => {
       seatIndex: 0,
     }];
     game.startingStack = startingStack;
-    game.setOnlinePlayers(members, playerCount);
+    game.setOnlinePlayers(members, playerCount, true);
+    game.roomId = res.roomId;
     renderLobby(elements, {
       roomId: res.roomId,
       isHost: true,
@@ -260,6 +269,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     inOnlineRoom = true;
     game.onlineMode = true;
     game.isHost = true;
+    game.roomStatus = 'lobby';
     game.lobbyPanelOpen = true;
     game.localSeatIndex = 0;
     setMessage(elements.message, 'Room created! Share the invite link.');
@@ -313,12 +323,16 @@ elements.joinModalRoomInput?.addEventListener('keydown', (e) => {
   }
 });
 
-elements.leaveRoomBtn.addEventListener('click', () => {
+elements.leaveRoomBtn.addEventListener('click', leaveOnlineRoom);
+elements.leaveSessionBtn?.addEventListener('click', leaveOnlineRoom);
+
+function leaveOnlineRoom() {
   network.leaveRoom();
   inOnlineRoom = false;
   game.onlineMode = false;
   game.isHost = false;
   game.lobbyPanelOpen = false;
+  game.roomStatus = 'lobby';
   game.phase = 'idle';
   game.resetPlayers();
   hideMultiplayerPanel(elements);
@@ -326,7 +340,7 @@ elements.leaveRoomBtn.addEventListener('click', () => {
   clearRoomFromUrl();
   setMessage(elements.message, 'Left the room.');
   renderGame(game, elements);
-});
+}
 
 elements.copyLinkBtn.addEventListener('click', async () => {
   const link = elements.inviteLinkInput?.value;
@@ -390,6 +404,10 @@ elements.autoSkipCheckbox.addEventListener('change', (e) => {
 });
 
 elements.showBotHandsCheckbox.addEventListener('change', (e) => {
+  if (game.onlineMode) {
+    e.target.checked = false;
+    return;
+  }
   showBotHandsAtEnd = e.target.checked;
   game.setShowBotHandsAtEnd(showBotHandsAtEnd);
   try { localStorage.setItem('poker-show-bot-hands', showBotHandsAtEnd ? '1' : '0'); } catch { /* ignore */ }

@@ -64,6 +64,8 @@ export class PokerGame {
     this.isHost = false;
     this._lastMessage = '';
     this.roomMembers = new Map();
+    this.roomStatus = 'lobby';
+    this.roomId = null;
   }
 
   setRoomMembers(members) {
@@ -109,18 +111,19 @@ export class PokerGame {
     return this.setPlayerCount(this.playerCount - 1);
   }
 
-  setOnlinePlayers(members, playerCount) {
+  setOnlinePlayers(members, playerCount, resetChips = null) {
     this.playerCount = playerCount;
     this.onlineMode = true;
     this.setRoomMembers(members);
     const bySeat = new Map(members.map(m => [m.seatIndex, m]));
     const prev = this.players;
     const inLobby = this.phase === 'idle' || this.phase === 'showdown';
+    const shouldReset = resetChips ?? inLobby;
     const stack = this.startingStack ?? DEFAULT_STARTING_STACK;
     this.players = [];
     for (let i = 0; i < playerCount; i++) {
       const member = bySeat.get(i);
-      const chips = inLobby ? stack : (prev[i]?.chips ?? stack);
+      const chips = shouldReset ? stack : (prev[i]?.chips ?? stack);
       if (member) {
         this.players.push({
           id: i,
@@ -153,6 +156,10 @@ export class PokerGame {
   toNetworkState(viewerSeat) {
     const showHole = (p, i) => {
       if (i === viewerSeat) return cloneCards(p.hole);
+      if (this.onlineMode) {
+        if (this.phase === 'showdown' && !p.folded) return cloneCards(p.hole);
+        return [];
+      }
       if (this.showBotHandsAtEnd && this.handsRevealed) return cloneCards(p.hole);
       if (this.phase === 'showdown' && !p.folded) return cloneCards(p.hole);
       return [];
@@ -203,6 +210,8 @@ export class PokerGame {
     this.handsRevealed = !!state.handsRevealed;
     this.actedThisRound = new Set(state.actedThisRound || []);
     this._lastMessage = state.message || '';
+    if (state.status) this.roomStatus = state.status;
+    if (state.roomId) this.roomId = state.roomId;
     if (state.members?.length) this.setRoomMembers(state.members);
     this.players = (state.players || []).map((p, i) => {
       const existing = this.players[i];
@@ -316,7 +325,7 @@ export class PokerGame {
   }
 
   logRevealedHands() {
-    if (!this.showBotHandsAtEnd) return;
+    if (!this.showBotHandsAtEnd || this.onlineMode) return;
     this.handsRevealed = true;
     this.handHistory.push('--- Hands ---');
     for (const p of this.players) {

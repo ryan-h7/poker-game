@@ -293,11 +293,14 @@ function renderPlayers(game, el) {
     const isActive = game.players[game.activeIndex]?.id === p.id &&
       game.phase !== 'idle' && game.phase !== 'showdown';
     const isDealer = i === game.dealerIndex;
-    const showCards = (game.onlineMode ? i === game.localSeatIndex : p.isHuman)
-      || (game.showBotHandsAtEnd && game.handsRevealed)
-      || (game.phase === 'showdown' && !p.folded);
+    const showCards = game.onlineMode
+      ? (i === game.localSeatIndex || (game.phase === 'showdown' && !p.folded))
+      : ((p.isHuman)
+        || (game.showBotHandsAtEnd && game.handsRevealed)
+        || (game.phase === 'showdown' && !p.folded));
     const folded = p.folded;
-    const faceDown = !showCards || (folded && !(game.showBotHandsAtEnd && game.handsRevealed));
+    const faceDown = !showCards
+      || (folded && !(game.onlineMode && game.phase === 'showdown'));
     const peekFolded = (game.onlineMode ? i === game.localSeatIndex : p.isHuman) && folded && faceDown;
     const youTag = game.onlineMode && i === game.localSeatIndex ? ' (you)' : '';
     const displayName = game.onlineMode ? game.getSeatDisplayName(i) : p.name;
@@ -356,53 +359,68 @@ function renderControls(game, elements) {
   if (displayBBBtn) displayBBBtn.classList.toggle('active', game.showInBB);
 
   if (setupBar) {
-    const inOnlineLobby = game.onlineMode && (game.phase === 'idle' || game.phase === 'showdown');
-    if (inOnlineLobby && !game.isHost) {
+    const betweenHands = game.phase === 'idle' || game.phase === 'showdown';
+    const inOnlineSession = game.onlineMode && game.roomStatus === 'active';
+    if (inOnlineSession && !game.isHost && betweenHands) {
       setupBar.classList.add('hidden');
+    } else if (inOnlineSession && game.isHost && betweenHands) {
+      setupBar.classList.remove('hidden');
     } else {
       setupBar.classList.toggle('hidden', !canConfigure);
     }
+  }
+  if (elements.showBotHandsCheckbox?.parentElement) {
+    elements.showBotHandsCheckbox.parentElement.classList.toggle('hidden', game.onlineMode);
   }
   if (skipBar) skipBar.classList.toggle('hidden', !game.canSkipHand());
   if (skipBtn) skipBtn.disabled = game.fastForward;
 
   const configDisabled = !canConfigure || !hostOrSolo;
+  const betweenHands = game.phase === 'idle' || game.phase === 'showdown';
+  const inHand = !betweenHands;
   if (botCountLabel) botCountLabel.textContent = String(game.getBotCount());
   if (tableSizeHint) {
     const humans = game.getHumanCount();
     tableSizeHint.textContent = `${game.playerCount} players (${humans} human${humans === 1 ? '' : 's'})`;
   }
-  if (addBotBtn) addBotBtn.disabled = configDisabled || !game.canAddBot();
-  if (removeBotBtn) removeBotBtn.disabled = configDisabled || !game.canRemoveBot();
+  const lockTableMeta = game.onlineMode && game.roomStatus === 'active';
+  if (addBotBtn) addBotBtn.disabled = configDisabled || inHand || !game.canAddBot();
+  if (removeBotBtn) removeBotBtn.disabled = configDisabled || inHand || !game.canRemoveBot();
   if (startingStackSelect) {
     startingStackSelect.value = String(game.startingStack);
-    startingStackSelect.disabled = configDisabled;
+    startingStackSelect.disabled = configDisabled || lockTableMeta;
   }
   if (bigBlindSelect) {
     bigBlindSelect.value = String(game.bigBlind);
-    bigBlindSelect.disabled = configDisabled;
+    bigBlindSelect.disabled = configDisabled || lockTableMeta;
   }
 
   const isTurn = game.isHumanTurn();
-  const inHand = game.phase !== 'idle' && game.phase !== 'showdown';
 
+  if (elements.sessionBar) {
+    const showSession = game.onlineMode && game.roomStatus === 'active';
+    elements.sessionBar.classList.toggle('hidden', !showSession);
+    if (elements.sessionRoomCode && game.roomId) {
+      elements.sessionRoomCode.textContent = game.roomId;
+    }
+  }
   if (elements.leaveRoomBtn) elements.leaveRoomBtn.classList.toggle('hidden', !game.onlineMode);
-  const showLobby = game.onlineMode || game.lobbyPanelOpen;
+  const showLobbyPanel = game.onlineMode && game.roomStatus === 'lobby';
   if (elements.multiplayerPanel) {
-    elements.multiplayerPanel.classList.toggle('hidden', !showLobby || inHand);
+    elements.multiplayerPanel.classList.toggle('hidden', !showLobbyPanel);
   }
   if (elements.playFriendsBtn) {
     elements.playFriendsBtn.classList.toggle('hidden', game.onlineMode);
   }
 
-  if (game.phase === 'idle' || game.phase === 'showdown') {
+  if (betweenHands) {
     controls.classList.add('hidden');
     const lowChips = game.players.filter(p => p.chips > 0).length < 2;
     if (newHandBtn) {
       newHandBtn.disabled = game.replaying
         || lowChips
         || (game.onlineMode && !game.isHost);
-      newHandBtn.textContent = game.onlineMode ? 'Deal Hand (Host)' : 'Deal Hand';
+      newHandBtn.textContent = game.onlineMode ? 'Deal Next Hand' : 'Deal Hand';
     }
     if (replayHandBtn) replayHandBtn.disabled = !game.canReplayHand();
     return;

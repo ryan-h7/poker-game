@@ -480,6 +480,33 @@ header h1 {
   cursor: not-allowed;
 }
 
+.message-bar {
+  grid-column: 1;
+  justify-self: center;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--gold);
+  min-height: 1.4rem;
+  order: 5;
+}
+
+.session-bar {
+  grid-column: 1;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  order: 6;
+  font-size: 0.85rem;
+}
+
+.session-bar.hidden { display: none; }
+
+.session-room strong {
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
+
 .setup-bar {
   grid-column: 1;
   justify-self: center;

@@ -1,6 +1,7 @@
 import { PokerGame } from '../js/game.js';
 
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const MAX_TABLE_SIZE = 8;
 
 function makeRoomId() {
   let id = '';
@@ -48,30 +49,51 @@ class Room {
     this.message = 'Waiting for players…';
   }
 
+  reserveSeatForJoin() {
+    const n = this.members.size;
+    if (n >= MAX_TABLE_SIZE) {
+      return { ok: false, error: 'Table is full.' };
+    }
+
+    let playerCount = this.settings.playerCount;
+
+    if (n < playerCount) {
+      return { ok: true, seatIndex: n };
+    }
+    if (playerCount < MAX_TABLE_SIZE) {
+      this.settings.playerCount = n + 1;
+      return { ok: true, seatIndex: n };
+    }
+    return { ok: false, error: 'Table is full.' };
+  }
+
   addMember(socket, name, isHost = false) {
     const displayName = String(name || 'Player').trim().slice(0, 16) || 'Player';
-    if (this.members.size >= 8) return { ok: false, error: 'Room is full.' };
-    if (this.members.size >= this.settings.playerCount) {
-      return { ok: false, error: 'All seats are taken. Ask the host to add a seat.' };
-    }
-    if (this.status !== 'lobby') return { ok: false, error: 'Game already in progress.' };
 
-    const seatIndex = this.members.size;
+    if (this.game
+      && this.game.phase !== 'idle'
+      && this.game.phase !== 'showdown') {
+      return { ok: false, error: 'Wait for the current hand to finish before joining.' };
+    }
+
+    const seat = this.reserveSeatForJoin();
+    if (!seat.ok) return seat;
+
     const member = {
       id: socket.id,
       name: displayName,
-      seatIndex,
+      seatIndex: seat.seatIndex,
       isHost: isHost || socket.id === this.hostId,
     };
     this.members.set(socket.id, member);
     socket.join(this.id);
     socket.data.roomId = this.id;
-    socket.data.seatIndex = seatIndex;
+    socket.data.seatIndex = seat.seatIndex;
     if (isHost) this.hostId = socket.id;
 
     this.message = `${displayName} joined the table.`;
-    this.broadcastLobby();
-    return { ok: true, roomId: this.id, seatIndex, isHost: member.isHost };
+    this.syncTable();
+    return { ok: true, roomId: this.id, seatIndex: seat.seatIndex, isHost: member.isHost };
   }
 
   removeMember(socketId) {
@@ -93,7 +115,7 @@ class Room {
         m.seatIndex = i++;
       }
       this.message = `${member.name} left the table.`;
-      this.broadcastLobby();
+      this.syncTable();
       return;
     }
 
@@ -105,21 +127,35 @@ class Room {
         this.game.handHistory.push(`${player.name} disconnected (folded)`);
         this.game.actedThisRound.add(seat);
         this.game.afterAction();
+      } else {
+        this.reindexMembers();
+        this.syncGamePlayers();
+        this.message = `${member.name} left the table.`;
+        this.broadcastGameState();
       }
-      this.message = `${member.name} left the table.`;
-      this.broadcastGameState();
     }
   }
 
+  reindexMembers() {
+    let i = 0;
+    for (const m of this.members.values()) {
+      m.seatIndex = i++;
+    }
+  }
+
+  canChangeSettings() {
+    if (!this.game) return true;
+    return this.game.phase === 'idle' || this.game.phase === 'showdown';
+  }
+
   updateSettings(socketId, settings) {
-    if (socketId !== this.hostId || this.status !== 'lobby') return false;
+    if (socketId !== this.hostId || !this.canChangeSettings()) return false;
     const humanCount = this.members.size;
     let playerCount = parseInt(settings.playerCount, 10) || 4;
-    playerCount = Math.max(2, Math.min(8, playerCount));
+    playerCount = Math.max(2, Math.min(MAX_TABLE_SIZE, playerCount));
     if (playerCount < humanCount) return false;
     const bigBlind = parseInt(settings.bigBlind, 10) || 20;
     const startingStack = Math.max(100, Math.min(100000, parseInt(settings.startingStack, 10) || 1000));
-    if (playerCount < humanCount) return false;
     this.settings.playerCount = playerCount;
     this.settings.bigBlind = bigBlind;
     this.settings.startingStack = startingStack;
@@ -130,7 +166,7 @@ class Room {
         for (const p of this.game.players) p.chips = startingStack;
       }
     }
-    this.broadcastLobby();
+    this.syncTable();
     return true;
   }
 
@@ -141,8 +177,9 @@ class Room {
       return { ok: false, error: 'Hand already in progress.' };
     }
 
-    this.status = 'playing';
+    this.status = 'active';
     this.ensureGame();
+    this.syncGamePlayers();
     this.game.startNewHand();
     this.message = this.game._lastMessage || 'New hand dealt.';
     this.broadcastGameState();
@@ -150,10 +187,7 @@ class Room {
   }
 
   ensureGame() {
-    if (this.game) {
-      this.syncGamePlayers();
-      return;
-    }
+    if (this.game) return;
 
     const onUpdate = () => this.broadcastGameState();
     const onMessage = (msg) => {
@@ -164,17 +198,18 @@ class Room {
     this.game = new PokerGame(onUpdate, onMessage);
     this.game.serverMode = true;
     this.game.onlineMode = true;
+    this.game.showBotHandsAtEnd = false;
     this.game.playerCount = this.settings.playerCount;
     this.game.bigBlind = this.settings.bigBlind;
     this.game.startingStack = this.settings.startingStack;
     this.game.minRaise = this.settings.bigBlind;
-    this.syncGamePlayers();
   }
 
   syncGamePlayers() {
+    if (!this.game) return;
     const members = [...this.members.values()].sort((a, b) => a.seatIndex - b.seatIndex);
     this.game.startingStack = this.settings.startingStack;
-    this.game.setOnlinePlayers(members, this.settings.playerCount);
+    this.game.setOnlinePlayers(members, this.settings.playerCount, this.status === 'lobby');
     this.game.bigBlind = this.settings.bigBlind;
     this.game.minRaise = this.settings.bigBlind;
     if (this.status === 'lobby') {
@@ -182,8 +217,17 @@ class Room {
     }
   }
 
+  syncTable() {
+    if (this.game) {
+      this.syncGamePlayers();
+      this.broadcastGameState();
+    } else {
+      this.broadcastLobby();
+    }
+  }
+
   handleAction(socketId, action, amount = 0) {
-    if (!this.game || this.status !== 'playing') return { ok: false, error: 'No active hand.' };
+    if (!this.game || this.status === 'lobby') return { ok: false, error: 'No active hand.' };
     const member = this.members.get(socketId);
     if (!member) return { ok: false, error: 'Not in room.' };
 
@@ -250,11 +294,6 @@ class Room {
         isHost: m.id === this.hostId,
       }));
       this.io.to(socketId).emit('game-state', state);
-    }
-
-    if (this.game.phase === 'idle' || this.game.phase === 'showdown') {
-      this.status = 'lobby';
-      this.broadcastLobby();
     }
   }
 }
