@@ -405,7 +405,8 @@ function renderControls(game, elements) {
     }
   }
   if (elements.leaveRoomBtn) elements.leaveRoomBtn.classList.toggle('hidden', !game.onlineMode);
-  const showLobbyPanel = game.onlineMode && game.roomStatus === 'lobby';
+  const showLobbyPanel = game.lobbyPanelOpen
+    || (game.onlineMode && game.roomStatus === 'lobby');
   if (elements.multiplayerPanel) {
     elements.multiplayerPanel.classList.toggle('hidden', !showLobbyPanel);
   }
