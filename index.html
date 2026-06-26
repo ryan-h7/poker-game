@@ -13,6 +13,11 @@
     <header>
       <h1>Texas Hold'em</h1>
       <span id="phase" class="phase-badge">Ready</span>
+      <div id="display-mode" class="display-mode hidden" role="group" aria-label="Amount display">
+        <button type="button" id="display-dollars" class="display-mode-btn active">$</button>
+        <button type="button" id="display-bb" class="display-mode-btn">BB</button>
+      </div>
+      <button id="btn-stop-replay" class="btn btn-stop-replay hidden" type="button">Stop Replay</button>
     </header>
 
     <div class="table-area">
@@ -27,18 +32,88 @@
 
     <div id="message" class="message-bar"></div>
 
+    <div id="skip-bar" class="skip-bar hidden">
+      <button id="btn-skip" class="btn btn-skip" type="button">Skip to end</button>
+      <label class="skip-auto">
+        <input type="checkbox" id="auto-skip">
+        Auto-skip when folded pre-flop
+      </label>
+    </div>
+
     <div id="controls" class="controls hidden">
-      <button id="btn-fold" class="btn btn-fold">Fold</button>
-      <button id="btn-check" class="btn btn-check">Check</button>
-      <button id="btn-call" class="btn btn-call">Call</button>
-      <div class="raise-group">
-        <input type="range" id="raise-slider" min="0" max="1000" value="40">
-        <span id="raise-value" class="raise-value">40</span>
-        <button id="btn-raise" class="btn btn-raise">Raise</button>
+      <div class="action-row">
+        <button id="btn-fold" class="btn btn-fold">Fold</button>
+        <button id="btn-check" class="btn btn-check">Check</button>
+        <button id="btn-call" class="btn btn-call">Call</button>
+      </div>
+      <div class="raise-panel">
+        <div class="pot-presets" id="pot-presets">
+          <button type="button" class="btn-preset" data-pct="0.25">25%</button>
+          <button type="button" class="btn-preset" data-pct="0.33">33%</button>
+          <button type="button" class="btn-preset" data-pct="0.5">50%</button>
+          <button type="button" class="btn-preset" data-pct="0.66">66%</button>
+          <button type="button" class="btn-preset" data-pct="0.75">75%</button>
+          <button type="button" class="btn-preset" data-pct="1">100%</button>
+          <button type="button" class="btn-preset" data-pct="1.25">125%</button>
+        </div>
+        <div class="raise-adjust">
+          <label class="raise-input-label" for="raise-input" id="raise-input-label">Raise to $</label>
+          <input type="number" id="raise-input" class="raise-input" min="0" step="1" inputmode="numeric">
+          <input type="range" id="raise-slider" min="0" max="1000" value="40" aria-label="Raise amount slider">
+          <button id="btn-raise" class="btn btn-raise">Raise</button>
+          <button id="btn-allin" class="btn btn-allin" type="button">All-In</button>
+        </div>
+        <span id="raise-hint" class="raise-hint"></span>
       </div>
     </div>
 
-    <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
+    <div id="multiplayer-panel" class="multiplayer-panel hidden">
+      <div class="multiplayer-header">
+        <h2>Play with Friends</h2>
+        <button id="btn-leave-room" class="btn btn-leave hidden" type="button">Leave Room</button>
+      </div>
+      <div id="lobby-entry" class="lobby-entry">
+        <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
+        <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
+        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join from Link</button>
+      </div>
+      <div id="lobby-active" class="lobby-active hidden">
+        <p class="lobby-hint" id="lobby-hint">Share the link with friends.</p>
+        <div class="lobby-code">Room: <strong id="lobby-room-code">—</strong></div>
+        <div class="invite-row">
+          <input type="text" id="invite-link" class="invite-link" readonly>
+          <button id="btn-copy-link" class="btn btn-copy" type="button">Copy Link</button>
+        </div>
+        <ul id="lobby-players" class="lobby-players"></ul>
+      </div>
+    </div>
+
+    <div id="setup-bar" class="setup-bar">
+      <label class="setup-label" for="player-count">Players</label>
+      <select id="player-count" class="setup-select">
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4" selected>4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+      </select>
+      <label class="setup-label" for="big-blind">Big Blind</label>
+      <select id="big-blind" class="setup-select">
+        <option value="5">$5</option>
+        <option value="10">$10</option>
+        <option value="20" selected>$20</option>
+        <option value="25">$25</option>
+        <option value="50">$50</option>
+        <option value="100">$100</option>
+      </select>
+      <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
+      <button id="btn-play-friends" class="btn btn-friends" type="button">Play with Friends</button>
+      <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled>Replay Hand</button>
+      <label class="setup-option">
+        <input type="checkbox" id="show-bot-hands">
+        Show bot hands after each hand
+      </label>
+    </div>
 
     <aside class="sidebar">
       <h2>Action Log</h2>
@@ -46,6 +121,7 @@
     </aside>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

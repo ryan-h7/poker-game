@@ -127,6 +127,10 @@ export function compareHands(a, b) {
   return 0;
 }
 
+export function formatHoleCards(hole) {
+  return hole.map(c => `${c.rank}${c.suit}`).join(' ');
+}
+
 export function handName(score) {
   return HAND_NAMES[score.rank] || 'Unknown';
 }
@@ -143,4 +147,105 @@ export function preflopStrength(hole) {
   if (suited && a - b <= 2 && a >= 9) return 0.4 + a / 40;
   if (a >= 11 && b >= 10) return 0.42;
   return 0.15 + a / 50 + b / 100;
+}
+
+/** Detect flush/straight draws from hole + community (post-flop). */
+export function detectDraws(hole, community) {
+  if (community.length < 3) {
+    return { drawStrength: 0, types: [], outs: 0, flushDraw: false, straightDraw: false };
+  }
+
+  const cards = [...hole, ...community];
+  const types = [];
+  let drawStrength = 0;
+  let outs = 0;
+
+  const suitCounts = {};
+  for (const c of cards) suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
+  const flushDraw = Object.values(suitCounts).some(n => n === 4);
+  if (flushDraw) {
+    types.push('flush');
+    drawStrength += 0.44;
+    outs += 9;
+  }
+
+  let values = [...new Set(cards.map(c => c.value))];
+  if (values.includes(14)) values.push(1);
+  values = [...new Set(values)].sort((a, b) => a - b);
+
+  let straightType = null;
+  for (let i = 0; i <= values.length - 4; i++) {
+    const span = values[i + 3] - values[i];
+    if (span === 3) {
+      straightType = 'oesd';
+      break;
+    }
+    if (span === 4) straightType = straightType || 'gutshot';
+  }
+
+  if (straightType === 'oesd') {
+    types.push('oesd');
+    drawStrength += 0.38;
+    outs += 8;
+  } else if (straightType === 'gutshot') {
+    types.push('gutshot');
+    drawStrength += 0.22;
+    outs += 4;
+  }
+
+  if (flushDraw && straightType) {
+    types.push('combo');
+    drawStrength = Math.min(0.72, drawStrength + 0.18);
+    outs += 2;
+  }
+
+  return {
+    drawStrength: Math.min(0.75, drawStrength),
+    types,
+    outs,
+    flushDraw,
+    straightDraw: !!straightType,
+  };
+}
+
+/** Bucket a hand for AI strategy: premium / marginal / draw / air. */
+export function classifyHand(hole, community) {
+  if (community.length === 0) {
+    const s = preflopStrength(hole);
+    if (s >= 0.72) return { category: 'premium', strength: s, draws: null };
+    if (s >= 0.42) return { category: 'marginal', strength: s, draws: null };
+    return { category: 'speculative', strength: s, draws: null };
+  }
+
+  const made = evaluateHand([...hole, ...community]);
+  const madeStrength = (made.rank + 1) / 10;
+  const draws = detectDraws(hole, community);
+
+  if (made.rank >= 3) return { category: 'premium', strength: madeStrength, draws, made };
+  if (made.rank >= 1) {
+    const blended = Math.max(madeStrength, madeStrength + draws.drawStrength * 0.25);
+    return { category: made.rank >= 2 ? 'premium' : 'marginal', strength: blended, draws, made };
+  }
+
+  if (draws.drawStrength >= 0.35) {
+    const blended = Math.max(madeStrength, draws.drawStrength * 0.9);
+    return { category: 'draw', strength: blended, draws, made };
+  }
+
+  return { category: 'air', strength: madeStrength, draws, made };
+}
+
+/** Rough flop texture for c-bet frequency. */
+export function boardTexture(community) {
+  if (community.length < 3) return 'none';
+  const ranks = community.slice(0, 3).map(c => c.value);
+  const suits = community.slice(0, 3).map(c => c.suit);
+  const paired = new Set(ranks).size < ranks.length;
+  const maxRank = Math.max(...ranks);
+  const monotone = new Set(suits).size === 1;
+  if (monotone) return 'wet';
+  if (paired) return 'paired';
+  if (maxRank >= 13) return 'dry-high';
+  if (maxRank <= 8) return 'dry-low';
+  return 'neutral';
 }
