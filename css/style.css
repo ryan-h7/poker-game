@@ -517,6 +517,31 @@ header h1 {
   border-color: #58a6ff;
 }
 
+.btn-rebuy {
+  background: #1f3d2a;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-rebuy:hover:not(:disabled) {
+  background: #264a34;
+}
+
+.btn-rebuy.hidden { display: none; }
+
+.btn-rebuy:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.max-rebuys-wrap.hidden { display: none; }
+
 .table-details-panel {
   grid-column: 1 / -1;
   background: var(--surface);

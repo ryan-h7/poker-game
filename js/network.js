@@ -98,6 +98,10 @@ export class NetworkClient {
     return this.emit('player-action', { action, amount });
   }
 
+  rebuy() {
+    return this.emit('rebuy');
+  }
+
   leaveRoom() {
     if (this.socket) this.socket.emit('leave-room');
     this.roomId = null;

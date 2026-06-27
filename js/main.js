@@ -34,6 +34,8 @@ const elements = {
   tableSizeHint: document.getElementById('table-size-hint'),
   startingStackSelect: document.getElementById('starting-stack'),
   bigBlindSelect: document.getElementById('big-blind'),
+  maxRebuysWrap: document.getElementById('max-rebuys-wrap'),
+  maxRebuysSelect: document.getElementById('max-rebuys'),
   setupBar: document.getElementById('setup-bar'),
   skipBar: document.getElementById('skip-bar'),
   skipBtn: document.getElementById('btn-skip'),
@@ -46,6 +48,7 @@ const elements = {
   multiplayerPanel: document.getElementById('multiplayer-panel'),
   lobbyEntry: document.getElementById('lobby-entry'),
   onlineToolbar: document.getElementById('online-toolbar'),
+  rebuyBtn: document.getElementById('btn-rebuy'),
   tableDetailsPanel: document.getElementById('table-details-panel'),
   tableDetailsBtn: document.getElementById('btn-table-details'),
   closeTableDetailsBtn: document.getElementById('btn-close-table-details'),
@@ -112,6 +115,7 @@ const network = new NetworkClient({
     game.playerCount = lobby.settings.playerCount;
     game.bigBlind = lobby.settings.bigBlind;
     game.startingStack = lobby.settings.startingStack ?? 1000;
+    game.maxRebuys = lobby.settings.maxRebuys ?? 3;
     game.roomId = lobby.roomId;
     game.inviteLink = lobby.inviteLink || game.inviteLink;
     game.setOnlinePlayers(lobby.members, lobby.settings.playerCount, true);
@@ -163,6 +167,7 @@ function getTableSettings() {
     playerCount: game.playerCount,
     bigBlind: parseInt(elements.bigBlindSelect.value, 10),
     startingStack: parseInt(elements.startingStackSelect.value, 10),
+    maxRebuys: parseInt(elements.maxRebuysSelect?.value ?? '3', 10),
   };
 }
 
@@ -179,6 +184,7 @@ async function pushTableSettings(patch = {}) {
   if (patch.playerCount !== undefined) game.setPlayerCount(settings.playerCount);
   else if (patch.startingStack !== undefined) game.setStartingStack(settings.startingStack);
   else if (patch.bigBlind !== undefined) game.setBigBlind(settings.bigBlind);
+  else if (patch.maxRebuys !== undefined) game.maxRebuys = settings.maxRebuys;
   return true;
 }
 
@@ -274,6 +280,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     const playerCount = game.playerCount;
     const bigBlind = parseInt(elements.bigBlindSelect.value, 10);
     const startingStack = parseInt(elements.startingStackSelect.value, 10);
+    const maxRebuys = parseInt(elements.maxRebuysSelect?.value ?? '3', 10);
     const hostName = getPlayerName();
     const members = [{
       id: network.socket?.id,
@@ -282,6 +289,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
       seatIndex: 0,
     }];
     game.startingStack = startingStack;
+    game.maxRebuys = maxRebuys;
     game.setOnlinePlayers(members, playerCount, true);
     game.roomId = res.roomId;
     game.inviteLink = res.inviteLink || '';
@@ -292,7 +300,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
       localSocketId: network.socket?.id,
       inviteLink: res.inviteLink,
       members,
-      settings: { playerCount, bigBlind, startingStack },
+      settings: { playerCount, bigBlind, startingStack, maxRebuys },
       status: 'lobby',
     });
     inOnlineRoom = true;
@@ -356,6 +364,18 @@ elements.joinModalRoomInput?.addEventListener('keydown', (e) => {
 });
 
 elements.leaveSessionBtn?.addEventListener('click', leaveOnlineRoom);
+
+elements.rebuyBtn?.addEventListener('click', async () => {
+  if (!game.canRebuy()) return;
+  const btn = elements.rebuyBtn;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await network.rebuy();
+    if (!res.ok) setMessage(elements.message, res.error || 'Could not rebuy.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
 
 function toggleTableDetails(forceOpen) {
   if (!game.onlineMode || !game.roomId) return;
@@ -441,6 +461,17 @@ elements.bigBlindSelect.addEventListener('change', async (e) => {
     return;
   }
   game.setBigBlind(parseInt(e.target.value, 10));
+});
+
+elements.maxRebuysSelect?.addEventListener('change', async (e) => {
+  const maxRebuys = parseInt(e.target.value, 10);
+  if (isOnline() && game.isHost) {
+    await pushTableSettings({ maxRebuys });
+    renderGame(game, elements);
+    return;
+  }
+  game.maxRebuys = maxRebuys;
+  renderGame(game, elements);
 });
 
 elements.foldBtn.addEventListener('click', () => {

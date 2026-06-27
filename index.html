@@ -33,6 +33,7 @@
     <div id="message" class="message-bar"></div>
 
     <div id="online-toolbar" class="online-toolbar hidden">
+      <button id="btn-rebuy" class="btn btn-rebuy hidden" type="button">Rebuy</button>
       <button id="btn-table-details" class="btn btn-table-details" type="button" aria-expanded="false">Table details</button>
       <button id="btn-leave-session" class="btn btn-leave" type="button">Leave table</button>
     </div>
@@ -112,6 +113,17 @@
         <option value="50">$50</option>
         <option value="100">$100</option>
       </select>
+      <span id="max-rebuys-wrap" class="max-rebuys-wrap hidden">
+        <label class="setup-label" for="max-rebuys">Rebuys</label>
+        <select id="max-rebuys" class="setup-select">
+          <option value="0">None</option>
+          <option value="1">1 per player</option>
+          <option value="2">2 per player</option>
+          <option value="3" selected>3 per player</option>
+          <option value="5">5 per player</option>
+          <option value="-1">Unlimited</option>
+        </select>
+      </span>
       <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
       <button id="btn-play-friends" class="btn btn-friends" type="button">Play with Friends</button>
       <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled>Replay Hand</button>

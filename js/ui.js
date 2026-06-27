@@ -149,6 +149,12 @@ function getSeatPosition(index, total) {
   };
 }
 
+function formatRebuyLimit(maxRebuys) {
+  if (maxRebuys === 0) return 'no rebuys';
+  if (maxRebuys < 0) return 'unlimited rebuys';
+  return `${maxRebuys} rebuy${maxRebuys === 1 ? '' : 's'}/player`;
+}
+
 export function showJoinModal(elements, roomId = '', { invited = false } = {}) {
   const {
     joinModal, joinModalRoomInput, joinModalName, joinModalError,
@@ -214,17 +220,28 @@ export function renderTableDetails(elements, info) {
 
   if (lobbyPlayers && info.members) {
     const canTransfer = info.isHost && info.members.length > 1;
+    const maxRebuys = info.settings?.maxRebuys ?? 3;
     lobbyPlayers.innerHTML = info.members.map(m => {
       const showMakeHost = canTransfer && m.id !== info.localSocketId && !m.isHost;
+      let rebuyNote = '';
+      if (maxRebuys !== 0) {
+        const used = m.rebuyCount || 0;
+        if (maxRebuys < 0 && used > 0) rebuyNote = ` · ${used} rebought`;
+        else if (maxRebuys > 0) rebuyNote = ` · ${used}/${maxRebuys} rebuys`;
+      }
       return `
       <li class="lobby-player">
-        <span class="lobby-player-name">${m.name}${m.isHost ? ' (host)' : ''}</span>
+        <span class="lobby-player-name">${m.name}${m.isHost ? ' (host)' : ''}${rebuyNote}</span>
         <span class="lobby-player-actions">
           ${showMakeHost ? `<button type="button" class="btn-make-host" data-member-id="${m.id}">Make host</button>` : ''}
           <span class="lobby-seat">Seat ${m.seatIndex + 1}</span>
         </span>
       </li>`;
     }).join('');
+  }
+
+  if (elements.maxRebuysSelect && info.settings?.maxRebuys !== undefined) {
+    elements.maxRebuysSelect.value = String(info.settings.maxRebuys);
   }
 
   if (elements.startingStackSelect && info.settings?.startingStack) {
@@ -238,8 +255,9 @@ export function renderTableDetails(elements, info) {
     const humans = info.members.length;
     const bots = Math.max(0, info.settings.playerCount - humans);
     const stack = info.settings.startingStack ?? 1000;
+    const rebuyText = formatRebuyLimit(info.settings.maxRebuys ?? 3);
     lobbyTableSettings.textContent =
-      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB`;
+      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB · ${rebuyText}`;
   }
 }
 
@@ -280,6 +298,7 @@ export function buildTableInfo(game) {
       playerCount: game.playerCount,
       bigBlind: game.bigBlind,
       startingStack: game.startingStack,
+      maxRebuys: game.maxRebuys,
     },
     status: game.roomStatus,
   };
@@ -392,6 +411,7 @@ function renderControls(game, elements) {
     controls, foldBtn, checkBtn, callBtn, raiseBtn, raiseSlider, raiseInput,
     allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, bigBlindSelect,
     startingStackSelect, addBotBtn, removeBotBtn, botCountLabel, tableSizeHint,
+    maxRebuysWrap, maxRebuysSelect,
     setupBar, skipBar, skipBtn, displayModeBar, displayDollarsBtn, displayBBBtn,
   } = elements;
   const canConfigure = game.canChangeSettings();
@@ -438,12 +458,32 @@ function renderControls(game, elements) {
     bigBlindSelect.value = String(game.bigBlind);
     bigBlindSelect.disabled = configDisabled || lockTableMeta;
   }
+  if (maxRebuysWrap) {
+    maxRebuysWrap.classList.toggle('hidden', !game.onlineMode || !game.isHost);
+  }
+  if (maxRebuysSelect) {
+    maxRebuysSelect.value = String(game.maxRebuys ?? 3);
+    maxRebuysSelect.disabled = configDisabled;
+  }
 
   const isTurn = game.isHumanTurn();
 
   if (elements.onlineToolbar) {
     const showToolbar = game.onlineMode && !!game.roomId;
     elements.onlineToolbar.classList.toggle('hidden', !showToolbar);
+  }
+  if (elements.rebuyBtn) {
+    const showRebuy = game.canRebuy();
+    elements.rebuyBtn.classList.toggle('hidden', !showRebuy);
+    if (showRebuy) {
+      const remaining = game.rebuysRemaining();
+      let label = `Rebuy ${game.formatAmount(game.startingStack)}`;
+      if (remaining !== null) label += ` (${remaining} left)`;
+      elements.rebuyBtn.textContent = label;
+    } else {
+      elements.rebuyBtn.textContent = 'Rebuy';
+    }
+    elements.rebuyBtn.disabled = !showRebuy;
   }
   if (elements.tableDetailsPanel) {
     const showDetails = game.onlineMode && !!game.roomId && game.tableDetailsOpen;

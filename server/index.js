@@ -51,13 +51,13 @@ io.on('connection', (socket) => {
     cb?.({ ok: true, ...result, inviteLink: link });
   });
 
-  socket.on('update-settings', ({ playerCount, bigBlind, startingStack }, cb) => {
+  socket.on('update-settings', ({ playerCount, bigBlind, startingStack, maxRebuys }, cb) => {
     const room = rooms.get(socket.data.roomId);
     if (!room) {
       cb?.({ ok: false, error: 'Not in a room.' });
       return;
     }
-    const ok = room.updateSettings(socket.id, { playerCount, bigBlind, startingStack });
+    const ok = room.updateSettings(socket.id, { playerCount, bigBlind, startingStack, maxRebuys });
     cb?.({ ok, error: ok ? undefined : 'Could not update table settings.' });
   });
 
@@ -86,6 +86,15 @@ io.on('connection', (socket) => {
       return;
     }
     cb?.(room.assignHost(socket.id, targetSocketId));
+  });
+
+  socket.on('rebuy', (_, cb) => {
+    const room = rooms.get(socket.data.roomId);
+    if (!room) {
+      cb?.({ ok: false, error: 'Not in a room.' });
+      return;
+    }
+    cb?.(room.rebuy(socket.id));
   });
 
   socket.on('leave-room', () => {

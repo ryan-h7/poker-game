@@ -46,7 +46,7 @@ class Room {
     this.onEmpty = onEmpty;
     this.membersByToken = new Map();
     this.status = 'lobby';
-    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000 };
+    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000, maxRebuys: 3 };
     this.game = null;
     this.message = 'Waiting for players…';
     this.disconnectGraceMs = 90_000;
@@ -78,7 +78,15 @@ class Room {
       seatIndex: member.seatIndex,
       isHost: member.token === this.hostToken,
       connected: !!member.socketId,
+      rebuyCount: member.rebuyCount || 0,
     };
+  }
+
+  rebuysRemaining(member) {
+    const max = this.settings.maxRebuys;
+    if (max === 0) return 0;
+    if (max < 0) return null;
+    return Math.max(0, max - (member.rebuyCount || 0));
   }
 
   reserveSeatForJoin() {
@@ -124,6 +132,7 @@ class Room {
       name: displayName,
       seatIndex: seat.seatIndex,
       disconnectTimer: null,
+      rebuyCount: 0,
     };
     this.membersByToken.set(token, member);
     socket.join(this.id);
@@ -289,9 +298,13 @@ class Room {
     if (playerCount < humanCount) return false;
     const bigBlind = parseInt(settings.bigBlind, 10) || 20;
     const startingStack = Math.max(100, Math.min(100000, parseInt(settings.startingStack, 10) || 1000));
+    let maxRebuys = parseInt(settings.maxRebuys, 10);
+    if (!Number.isFinite(maxRebuys)) maxRebuys = this.settings.maxRebuys ?? 3;
+    maxRebuys = Math.max(-1, Math.min(10, maxRebuys));
     this.settings.playerCount = playerCount;
     this.settings.bigBlind = bigBlind;
     this.settings.startingStack = startingStack;
+    this.settings.maxRebuys = maxRebuys;
     if (this.game) {
       this.game.startingStack = startingStack;
       this.syncGamePlayers();
@@ -383,6 +396,39 @@ class Room {
     return { ok: true };
   }
 
+  rebuy(socketId) {
+    if (!this.game) {
+      return { ok: false, error: 'Not in an active session.' };
+    }
+    if (!this.canChangeSettings()) {
+      return { ok: false, error: 'Wait for the current hand to finish.' };
+    }
+    const member = this.getMemberBySocket(socketId);
+    if (!member) return { ok: false, error: 'Not in room.' };
+
+    const player = this.game.players[member.seatIndex];
+    if (!player?.isHuman) return { ok: false, error: 'Invalid seat.' };
+    if (player.chips > 0) {
+      return { ok: false, error: 'Rebuy is only available when you have no chips.' };
+    }
+
+    const remaining = this.rebuysRemaining(member);
+    if (remaining === 0) {
+      return { ok: false, error: 'You have no rebuys remaining.' };
+    }
+
+    const stack = this.settings.startingStack;
+    player.chips = stack;
+    player.inHand = true;
+    player.folded = false;
+    member.rebuyCount = (member.rebuyCount || 0) + 1;
+    const left = this.rebuysRemaining(member);
+    const leftText = left === null ? '' : ` (${left} rebuy${left === 1 ? '' : 's'} left)`;
+    this.message = `${player.name} rebought for ${this.game.formatAmount(stack)}${leftText}.`;
+    this.broadcastGameState();
+    return { ok: true };
+  }
+
   getInviteLink(socket) {
     const host = socket.request.headers.host || 'localhost:3000';
     const proto = socket.request.headers['x-forwarded-proto'] || 'http';
@@ -424,6 +470,8 @@ class Room {
       state.isHost = member.token === this.hostToken;
       state.localSeatIndex = member.seatIndex;
       state.message = this.message;
+      state.maxRebuys = this.settings.maxRebuys;
+      state.localRebuyCount = member.rebuyCount || 0;
       state.members = this.allMembers().map(m => this.memberPayload(m));
       const socket = this.io.sockets.sockets.get(member.socketId);
       if (socket) state.inviteLink = this.getInviteLink(socket);

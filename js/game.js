@@ -33,6 +33,8 @@ export class PokerGame {
     this.playerCount = 4;
     this.bigBlind = 20;
     this.startingStack = DEFAULT_STARTING_STACK;
+    this.maxRebuys = 3;
+    this.localRebuyCount = 0;
     this.dealerIndex = 0;
     this.resetPlayers();
     this.phase = 'idle';
@@ -202,6 +204,8 @@ export class PokerGame {
     this.playerCount = state.playerCount;
     this.bigBlind = state.bigBlind;
     if (state.startingStack) this.startingStack = state.startingStack;
+    if (state.maxRebuys !== undefined) this.maxRebuys = state.maxRebuys;
+    if (state.localRebuyCount !== undefined) this.localRebuyCount = state.localRebuyCount;
     this.dealerIndex = state.dealerIndex;
     this.phase = state.phase;
     this.community = cloneCards(state.community || []);
@@ -354,6 +358,22 @@ export class PokerGame {
   canReplayHand() {
     if (this.onlineMode) return false;
     return !!this.lastHandReplay && this.canChangeSettings();
+  }
+
+  canRebuy() {
+    if (!this.onlineMode || this.roomStatus !== 'active' || this.replaying) return false;
+    if (this.phase !== 'idle' && this.phase !== 'showdown') return false;
+    const me = this.players[this.localSeatIndex];
+    if (!me?.isHuman || me.chips > 0) return false;
+    if (this.maxRebuys === 0) return false;
+    if (this.maxRebuys < 0) return true;
+    return this.localRebuyCount < this.maxRebuys;
+  }
+
+  rebuysRemaining() {
+    if (this.maxRebuys === 0) return 0;
+    if (this.maxRebuys < 0) return null;
+    return Math.max(0, this.maxRebuys - this.localRebuyCount);
   }
 
   captureHandSnapshot() {
