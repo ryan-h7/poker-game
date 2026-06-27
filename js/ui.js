@@ -137,7 +137,7 @@ function isPortraitTable() {
 
 function getSeatPosition(index, total) {
   const portrait = isPortraitTable();
-  const radiusX = portrait ? 28 : 38;
+  const radiusX = portrait ? 32 : 38;
   const radiusY = portrait ? 36 : 42;
   const angle = (Math.PI / 2) + (index * 2 * Math.PI) / total;
   const x = 50 + radiusX * Math.cos(angle);
