@@ -1058,7 +1058,7 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .table {
-    max-width: min(94vw, 360px);
+    max-width: min(98vw, 380px);
     aspect-ratio: 4 / 5;
     margin: 0 auto;
   }
@@ -1067,17 +1067,62 @@ body.invite-join-pending .multiplayer-panel {
     inset: 10% 10%;
     gap: 0.35rem;
     border-width: 4px;
+    z-index: 2;
   }
 
-  .pot {
-    font-size: 0.85rem;
-    min-height: 1.1rem;
+  .seats {
+    z-index: 1;
   }
 
   .community {
     gap: 0.15rem;
-    transform: scale(0.88);
+    transform: scale(0.85);
     transform-origin: center;
+    position: relative;
+    z-index: 3;
+  }
+
+  /* Side seats: stack hole cards vertically and tuck them toward the rail */
+  .player-seat.seat-side-left,
+  .player-seat.seat-side-right {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.2rem;
+    max-width: 22%;
+  }
+
+  .player-seat.seat-side-left {
+    flex-direction: row-reverse;
+  }
+
+  .player-seat.seat-side-right .player-info {
+    order: 1;
+  }
+
+  .player-seat.seat-side-right .player-cards {
+    order: 2;
+  }
+
+  .player-seat.seat-side-left .player-cards,
+  .player-seat.seat-side-right .player-cards {
+    flex-direction: column;
+    gap: 0.08rem;
+    flex-shrink: 0;
+  }
+
+  .player-seat.seat-side-left .player-info,
+  .player-seat.seat-side-right .player-info {
+    min-width: 52px;
+    max-width: 64px;
+    flex-shrink: 1;
+  }
+
+  .player-seat.seat-side-left .player-cards {
+    margin-right: 0.1rem;
+  }
+
+  .player-seat.seat-side-right .player-cards {
+    margin-left: 0.1rem;
   }
 
   .card,
