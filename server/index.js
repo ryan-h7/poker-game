@@ -24,23 +24,25 @@ io.on('connection', (socket) => {
     const room = rooms.create(socket, name);
     if (settings) room.updateSettings(socket.id, settings);
     const link = room.getInviteLink(socket);
+    const host = room.allMembers()[0];
     cb?.({
       ok: true,
       roomId: room.id,
       seatIndex: 0,
       isHost: true,
+      memberToken: host?.token,
       inviteLink: link,
     });
     room.broadcastLobby();
   });
 
-  socket.on('join-room', ({ roomId, name }, cb) => {
+  socket.on('join-room', ({ roomId, name, memberToken }, cb) => {
     const room = rooms.get(roomId);
     if (!room) {
       cb?.({ ok: false, error: 'Room not found.' });
       return;
     }
-    const result = room.addMember(socket, name);
+    const result = room.addMember(socket, name, false, memberToken || null);
     if (!result.ok) {
       cb?.(result);
       return;
@@ -100,8 +102,7 @@ io.on('connection', (socket) => {
     const roomId = socket.data.roomId;
     if (!roomId) return;
     const room = rooms.get(roomId);
-    room?.removeMember(socket.id);
-    rooms.removeIfEmpty(roomId);
+    room?.disconnectMember(socket.id);
   });
 });
 

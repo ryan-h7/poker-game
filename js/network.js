@@ -6,6 +6,7 @@ export class NetworkClient {
     this.socket = null;
     this.roomId = null;
     this.inviteLink = null;
+    this.memberToken = null;
     this.isHost = false;
     this.seatIndex = 0;
     this.connected = false;
@@ -59,18 +60,26 @@ export class NetworkClient {
     this.isHost = res.isHost;
     this.seatIndex = res.seatIndex;
     this.inviteLink = res.inviteLink;
+    this.memberToken = res.memberToken;
+    saveRoomSession({ roomId: res.roomId, memberToken: res.memberToken, name });
     return res;
   }
 
-  async joinRoom(roomId, name) {
+  async joinRoom(roomId, name, memberToken = null) {
     await this.connect();
-    const res = await this.emit('join-room', { roomId, name });
+    const res = await this.emit('join-room', { roomId, name, memberToken });
     if (!res.ok) throw new Error(res.error || 'Could not join room.');
     this.roomId = res.roomId;
     this.isHost = res.isHost;
     this.seatIndex = res.seatIndex;
     this.inviteLink = res.inviteLink;
+    this.memberToken = res.memberToken;
+    saveRoomSession({ roomId: res.roomId, memberToken: res.memberToken, name });
     return res;
+  }
+
+  async reconnectRoom(roomId, name, memberToken) {
+    return this.joinRoom(roomId, name, memberToken);
   }
 
   transferHost(targetSocketId) {
@@ -93,7 +102,9 @@ export class NetworkClient {
     if (this.socket) this.socket.emit('leave-room');
     this.roomId = null;
     this.inviteLink = null;
+    this.memberToken = null;
     this.isHost = false;
+    clearRoomSession();
   }
 
   disconnect() {
@@ -117,4 +128,33 @@ export function clearRoomFromUrl() {
   const url = new URL(window.location.href);
   url.searchParams.delete('room');
   window.history.replaceState({}, '', url.pathname + url.search);
+}
+
+const ROOM_SESSION_KEY = 'poker-room-session';
+
+export function saveRoomSession({ roomId, memberToken, name }) {
+  if (!roomId || !memberToken) return;
+  try {
+    sessionStorage.setItem(ROOM_SESSION_KEY, JSON.stringify({
+      roomId,
+      memberToken,
+      name: String(name || 'Player').trim().slice(0, 16) || 'Player',
+    }));
+  } catch { /* ignore */ }
+}
+
+export function loadRoomSession() {
+  try {
+    const raw = sessionStorage.getItem(ROOM_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (!session?.roomId || !session?.memberToken) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+export function clearRoomSession() {
+  try { sessionStorage.removeItem(ROOM_SESSION_KEY); } catch { /* ignore */ }
 }

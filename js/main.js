@@ -5,7 +5,7 @@ import {
   showMultiplayerEntry, hideMultiplayerPanel,
   showJoinModal, hideJoinModal, setJoinModalError, renderTableDetails,
 } from './ui.js';
-import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode } from './network.js';
+import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode, loadRoomSession, clearRoomSession } from './network.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -365,6 +365,7 @@ elements.lobbyPlayers?.addEventListener('click', async (e) => {
 
 function leaveOnlineRoom() {
   network.leaveRoom();
+  clearRoomSession();
   inOnlineRoom = false;
   game.onlineMode = false;
   game.isHost = false;
@@ -516,10 +517,26 @@ window.addEventListener('orientationchange', () => {
   setTimeout(() => renderGame(game, elements), 150);
 });
 
-const roomFromUrl = getRoomFromUrl();
-if (roomFromUrl) {
-  pendingInviteRoomId = roomFromUrl;
-  showJoinModal(elements, roomFromUrl, { invited: true });
-} else {
-  setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
+async function tryRestoreOnlineSession() {
+  const session = loadRoomSession();
+  if (!session) return false;
+  try {
+    setMessage(elements.message, 'Reconnecting to your table…');
+    await network.reconnectRoom(session.roomId, session.name, session.memberToken);
+    return true;
+  } catch {
+    clearRoomSession();
+    return false;
+  }
 }
+
+const roomFromUrl = getRoomFromUrl();
+(async () => {
+  if (await tryRestoreOnlineSession()) return;
+  if (roomFromUrl) {
+    pendingInviteRoomId = roomFromUrl;
+    showJoinModal(elements, roomFromUrl, { invited: true });
+  } else {
+    setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
+  }
+})();

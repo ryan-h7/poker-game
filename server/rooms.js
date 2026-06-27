@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { PokerGame } from '../js/game.js';
 
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -19,7 +20,7 @@ export class RoomManager {
 
   create(socket, name) {
     const roomId = makeRoomId();
-    const room = new Room(roomId, socket.id, this.io);
+    const room = new Room(roomId, this.io, (id) => this.removeIfEmpty(id));
     this.rooms.set(roomId, room);
     room.addMember(socket, name, true);
     return room;
@@ -31,26 +32,57 @@ export class RoomManager {
 
   removeIfEmpty(roomId) {
     const room = this.get(roomId);
-    if (room && room.members.size === 0) {
+    if (room && room.membersByToken.size === 0) {
       this.rooms.delete(roomId);
     }
   }
 }
 
 class Room {
-  constructor(id, hostId, io) {
+  constructor(id, io, onEmpty) {
     this.id = id;
-    this.hostId = hostId;
+    this.hostToken = null;
     this.io = io;
-    this.members = new Map();
+    this.onEmpty = onEmpty;
+    this.membersByToken = new Map();
     this.status = 'lobby';
     this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000 };
     this.game = null;
     this.message = 'Waiting for players…';
+    this.disconnectGraceMs = 90_000;
+  }
+
+  getMemberBySocket(socketId) {
+    for (const member of this.membersByToken.values()) {
+      if (member.socketId === socketId) return member;
+    }
+    return null;
+  }
+
+  connectedMemberCount() {
+    let n = 0;
+    for (const member of this.membersByToken.values()) {
+      if (member.socketId) n += 1;
+    }
+    return n;
+  }
+
+  allMembers() {
+    return [...this.membersByToken.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+  }
+
+  memberPayload(member) {
+    return {
+      id: member.socketId || member.token,
+      name: member.name,
+      seatIndex: member.seatIndex,
+      isHost: member.token === this.hostToken,
+      connected: !!member.socketId,
+    };
   }
 
   reserveSeatForJoin() {
-    const n = this.members.size;
+    const n = this.membersByToken.size;
     if (n >= MAX_TABLE_SIZE) {
       return { ok: false, error: 'Table is full.' };
     }
@@ -67,7 +99,13 @@ class Room {
     return { ok: false, error: 'Table is full.' };
   }
 
-  addMember(socket, name, isHost = false) {
+  addMember(socket, name, isHost = false, reconnectToken = null) {
+    if (reconnectToken) {
+      const reconnected = this.reconnectMember(socket, reconnectToken, name);
+      if (reconnected) return reconnected;
+      return { ok: false, error: 'Could not reconnect. The room may have ended.' };
+    }
+
     const displayName = String(name || 'Player').trim().slice(0, 16) || 'Player';
 
     if (this.game
@@ -79,34 +117,104 @@ class Room {
     const seat = this.reserveSeatForJoin();
     if (!seat.ok) return seat;
 
+    const token = randomUUID();
     const member = {
-      id: socket.id,
+      token,
+      socketId: socket.id,
       name: displayName,
       seatIndex: seat.seatIndex,
-      isHost: isHost || socket.id === this.hostId,
+      disconnectTimer: null,
     };
-    this.members.set(socket.id, member);
+    this.membersByToken.set(token, member);
     socket.join(this.id);
     socket.data.roomId = this.id;
     socket.data.seatIndex = seat.seatIndex;
-    if (isHost) this.hostId = socket.id;
+    socket.data.memberToken = token;
+    if (isHost || !this.hostToken) this.hostToken = token;
 
     this.message = `${displayName} joined the table.`;
     this.syncTable();
-    return { ok: true, roomId: this.id, seatIndex: seat.seatIndex, isHost: member.isHost };
+    return {
+      ok: true,
+      roomId: this.id,
+      seatIndex: seat.seatIndex,
+      isHost: token === this.hostToken,
+      memberToken: token,
+    };
+  }
+
+  reconnectMember(socket, token, name) {
+    const member = this.membersByToken.get(token);
+    if (!member) return null;
+
+    if (member.disconnectTimer) {
+      clearTimeout(member.disconnectTimer);
+      member.disconnectTimer = null;
+    }
+
+    const displayName = String(name || member.name || 'Player').trim().slice(0, 16) || member.name;
+    member.name = displayName;
+    member.socketId = socket.id;
+    socket.join(this.id);
+    socket.data.roomId = this.id;
+    socket.data.seatIndex = member.seatIndex;
+    socket.data.memberToken = token;
+
+    this.message = `${displayName} reconnected.`;
+    this.syncTable();
+    return {
+      ok: true,
+      roomId: this.id,
+      seatIndex: member.seatIndex,
+      isHost: token === this.hostToken,
+      memberToken: token,
+    };
+  }
+
+  disconnectMember(socketId) {
+    const member = this.getMemberBySocket(socketId);
+    if (!member) return;
+
+    member.socketId = null;
+    if (member.disconnectTimer) clearTimeout(member.disconnectTimer);
+    member.disconnectTimer = setTimeout(() => {
+      member.disconnectTimer = null;
+      this.removeMemberByToken(member.token, { timedOut: true });
+    }, this.disconnectGraceMs);
+
+    this.message = `${member.name} disconnected.`;
+    if (this.game) this.broadcastGameState();
+    else this.broadcastLobby();
   }
 
   removeMember(socketId) {
-    const member = this.members.get(socketId);
+    const member = this.getMemberBySocket(socketId);
+    if (!member) return;
+    this.removeMemberByToken(member.token);
+  }
+
+  removeMemberByToken(token, { timedOut = false } = {}) {
+    const member = this.membersByToken.get(token);
     if (!member) return;
 
+    if (member.disconnectTimer) {
+      clearTimeout(member.disconnectTimer);
+      member.disconnectTimer = null;
+    }
+
     const leftName = member.name;
-    const wasHost = socketId === this.hostId;
-    this.members.delete(socketId);
-    if (this.members.size === 0) return;
+    const wasHost = token === this.hostToken;
+    const seat = member.seatIndex;
+    this.membersByToken.delete(token);
+    if (this.membersByToken.size === 0) {
+      this.onEmpty?.(this.id);
+      return;
+    }
 
     if (wasHost) this.transferHost(leftName);
-    else this.message = `${leftName} left the table.`;
+    else this.message = timedOut
+      ? `${leftName} timed out and left the table.`
+      : `${leftName} left the table.`;
 
     if (this.status === 'lobby') {
       this.reindexMembers();
@@ -115,11 +223,12 @@ class Room {
     }
 
     if (this.game) {
-      const seat = member.seatIndex;
       const player = this.game.players[seat];
       if (player && this.game.phase !== 'idle' && this.game.phase !== 'showdown' && !player.folded) {
         this.game.applyAction(player, 'fold');
-        this.game.handHistory.push(`${player.name} disconnected (folded)`);
+        this.game.handHistory.push(timedOut
+          ? `${player.name} timed out (folded)`
+          : `${player.name} disconnected (folded)`);
         this.game.actedThisRound.add(seat);
         this.game.afterAction();
       } else {
@@ -131,43 +240,39 @@ class Room {
   }
 
   assignHost(requesterId, targetSocketId) {
-    if (requesterId !== this.hostId) {
+    const requester = this.getMemberBySocket(requesterId);
+    if (!requester || requester.token !== this.hostToken) {
       return { ok: false, error: 'Only the host can transfer host.' };
     }
     if (targetSocketId === requesterId) {
       return { ok: false, error: 'You are already the host.' };
     }
-    const target = this.members.get(targetSocketId);
+    const target = this.getMemberBySocket(targetSocketId);
     if (!target) return { ok: false, error: 'Player not in room.' };
     if (this.game && !this.canChangeSettings()) {
       return { ok: false, error: 'Wait for the current hand to finish.' };
     }
 
-    const requester = this.members.get(requesterId);
-    for (const m of this.members.values()) m.isHost = false;
-    this.hostId = targetSocketId;
-    target.isHost = true;
-    const fromName = requester?.name || 'Host';
+    this.hostToken = target.token;
+    const fromName = requester.name || 'Host';
     this.message = `${fromName} made ${target.name} the host.`;
     this.syncTable();
     return { ok: true };
   }
 
   transferHost(leftName) {
-    for (const m of this.members.values()) m.isHost = false;
-    const sorted = [...this.members.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+    const sorted = this.allMembers();
     const newHost = sorted[0];
     if (!newHost) return;
-    this.hostId = newHost.id;
-    newHost.isHost = true;
+    this.hostToken = newHost.token;
     this.message = `${leftName} left. ${newHost.name} is now the host.`;
   }
 
   reindexMembers() {
-    let i = 0;
-    for (const m of this.members.values()) {
-      m.seatIndex = i++;
-    }
+    const members = this.allMembers();
+    members.forEach((member, i) => {
+      member.seatIndex = i;
+    });
   }
 
   canChangeSettings() {
@@ -176,8 +281,9 @@ class Room {
   }
 
   updateSettings(socketId, settings) {
-    if (socketId !== this.hostId || !this.canChangeSettings()) return false;
-    const humanCount = this.members.size;
+    const member = this.getMemberBySocket(socketId);
+    if (!member || member.token !== this.hostToken || !this.canChangeSettings()) return false;
+    const humanCount = this.membersByToken.size;
     let playerCount = parseInt(settings.playerCount, 10) || 4;
     playerCount = Math.max(2, Math.min(MAX_TABLE_SIZE, playerCount));
     if (playerCount < humanCount) return false;
@@ -198,8 +304,13 @@ class Room {
   }
 
   startHand(socketId) {
-    if (socketId !== this.hostId) return { ok: false, error: 'Only the host can deal.' };
-    if (this.members.size < 2) return { ok: false, error: 'Need at least 2 players to start.' };
+    const member = this.getMemberBySocket(socketId);
+    if (!member || member.token !== this.hostToken) {
+      return { ok: false, error: 'Only the host can deal.' };
+    }
+    if (this.connectedMemberCount() < 2) {
+      return { ok: false, error: 'Need at least 2 players to start.' };
+    }
     if (this.game && this.game.phase !== 'idle' && this.game.phase !== 'showdown') {
       return { ok: false, error: 'Hand already in progress.' };
     }
@@ -234,7 +345,7 @@ class Room {
 
   syncGamePlayers() {
     if (!this.game) return;
-    const members = [...this.members.values()].sort((a, b) => a.seatIndex - b.seatIndex);
+    const members = this.allMembers();
     this.game.startingStack = this.settings.startingStack;
     this.game.setOnlinePlayers(members, this.settings.playerCount, this.status === 'lobby');
     this.game.bigBlind = this.settings.bigBlind;
@@ -255,7 +366,7 @@ class Room {
 
   handleAction(socketId, action, amount = 0) {
     if (!this.game || this.status === 'lobby') return { ok: false, error: 'No active hand.' };
-    const member = this.members.get(socketId);
+    const member = this.getMemberBySocket(socketId);
     if (!member) return { ok: false, error: 'Not in room.' };
 
     const seat = member.seatIndex;
@@ -279,50 +390,44 @@ class Room {
   }
 
   lobbyPayload(forSocketId) {
+    const forMember = this.getMemberBySocket(forSocketId);
+    const hostMember = this.allMembers().find(m => m.token === this.hostToken);
     return {
       roomId: this.id,
       status: this.status,
-      isHost: forSocketId === this.hostId,
-      hostId: this.hostId,
+      isHost: forMember?.token === this.hostToken,
+      hostId: hostMember?.socketId ?? null,
       inviteLink: null,
       message: this.message,
       settings: { ...this.settings },
-      members: [...this.members.values()].map(m => ({
-        id: m.id,
-        name: m.name,
-        seatIndex: m.seatIndex,
-        isHost: m.id === this.hostId,
-      })),
+      members: this.allMembers().map(m => this.memberPayload(m)),
     };
   }
 
   broadcastLobby() {
-    for (const [socketId] of this.members) {
-      const payload = this.lobbyPayload(socketId);
-      const socket = this.io.sockets.sockets.get(socketId);
+    for (const member of this.membersByToken.values()) {
+      if (!member.socketId) continue;
+      const payload = this.lobbyPayload(member.socketId);
+      const socket = this.io.sockets.sockets.get(member.socketId);
       if (socket) payload.inviteLink = this.getInviteLink(socket);
-      this.io.to(socketId).emit('lobby-state', payload);
+      this.io.to(member.socketId).emit('lobby-state', payload);
     }
   }
 
   broadcastGameState() {
     if (!this.game) return;
-    for (const [socketId, member] of this.members) {
+    for (const member of this.membersByToken.values()) {
+      if (!member.socketId) continue;
       const state = this.game.toNetworkState(member.seatIndex);
       state.roomId = this.id;
       state.status = this.status;
-      state.isHost = socketId === this.hostId;
+      state.isHost = member.token === this.hostToken;
       state.localSeatIndex = member.seatIndex;
       state.message = this.message;
-      state.members = [...this.members.values()].map(m => ({
-        id: m.id,
-        name: m.name,
-        seatIndex: m.seatIndex,
-        isHost: m.id === this.hostId,
-      }));
-      const socket = this.io.sockets.sockets.get(socketId);
+      state.members = this.allMembers().map(m => this.memberPayload(m));
+      const socket = this.io.sockets.sockets.get(member.socketId);
       if (socket) state.inviteLink = this.getInviteLink(socket);
-      this.io.to(socketId).emit('game-state', state);
+      this.io.to(member.socketId).emit('game-state', state);
     }
   }
 }
