@@ -27,6 +27,7 @@ const elements = {
   raiseHint: document.getElementById('raise-hint'),
   newHandBtn: document.getElementById('btn-new-hand'),
   replayHandBtn: document.getElementById('btn-replay-hand'),
+  resetSoloBtn: document.getElementById('btn-reset-solo'),
   playFriendsBtn: document.getElementById('btn-play-friends'),
   addBotBtn: document.getElementById('btn-add-bot'),
   removeBotBtn: document.getElementById('btn-remove-bot'),
@@ -85,10 +86,22 @@ function scheduleSoloSave() {
   clearTimeout(soloSaveTimer);
   soloSaveTimer = setTimeout(() => {
     if (game.onlineMode || game.replaying) return;
+    if (!game.soloSessionActive) {
+      clearSoloState();
+      return;
+    }
     const state = game.exportSoloState();
-    if (state && state.phase !== 'idle') saveSoloState(state);
-    else clearSoloState();
+    if (state) saveSoloState(state);
   }, 250);
+}
+
+function syncSoloUIFromGame() {
+  if (elements.startingStackSelect) {
+    elements.startingStackSelect.value = String(game.startingStack);
+  }
+  if (elements.bigBlindSelect) {
+    elements.bigBlindSelect.value = String(game.bigBlind);
+  }
 }
 
 try {
@@ -282,6 +295,18 @@ elements.newHandBtn.addEventListener('click', async () => {
 elements.replayHandBtn.addEventListener('click', () => game.replayHand());
 elements.stopReplayBtn.addEventListener('click', () => game.stopReplay());
 
+elements.resetSoloBtn?.addEventListener('click', () => {
+  if (game.onlineMode || !game.soloSessionActive) return;
+  const ok = window.confirm(
+    'Reset the game? Chip stacks, dealer position, and hand history will be cleared.',
+  );
+  if (!ok) return;
+  game.resetSoloSession();
+  clearSoloState();
+  setMessage(elements.message, 'Game reset. Click "Deal Hand" to start fresh.');
+  renderGame(game, elements);
+});
+
 elements.playFriendsBtn?.addEventListener('click', () => {
   game.lobbyPanelOpen = true;
   showMultiplayerEntry(elements);
@@ -293,6 +318,7 @@ elements.playFriendsBtn?.addEventListener('click', () => {
 elements.createRoomBtn.addEventListener('click', async () => {
   try {
     clearSoloState();
+    game.soloSessionActive = false;
     const res = await network.createRoom(getPlayerName(), getTableSettings());
     const playerCount = game.playerCount;
     const bigBlind = parseInt(elements.bigBlindSelect.value, 10);
@@ -420,6 +446,8 @@ elements.lobbyPlayers?.addEventListener('click', async (e) => {
 function leaveOnlineRoom() {
   network.leaveRoom();
   clearRoomSession();
+  clearSoloState();
+  game.soloSessionActive = false;
   inOnlineRoom = false;
   game.onlineMode = false;
   game.isHost = false;
@@ -581,8 +609,8 @@ window.addEventListener('orientationchange', () => {
 
 async function tryRestoreSoloSession() {
   const state = loadSoloState();
-  if (!state || state.phase === 'idle') {
-    clearSoloState();
+  if (!state?.sessionActive) {
+    if (state) clearSoloState();
     return false;
   }
   if (!game.restoreSoloState(state)) {
@@ -591,7 +619,12 @@ async function tryRestoreSoloSession() {
   }
   game.setShowBotHandsAtEnd(showBotHandsAtEnd);
   game.setShowInBB(showInBB);
-  setMessage(elements.message, 'Restored your hand.');
+  syncSoloUIFromGame();
+  const betweenHands = game.phase === 'idle' || game.phase === 'showdown';
+  setMessage(
+    elements.message,
+    betweenHands ? 'Restored your game.' : 'Restored your hand.',
+  );
   renderGame(game, elements);
   return true;
 }

@@ -409,7 +409,7 @@ function renderPhase(game, el) {
 function renderControls(game, elements) {
   const {
     controls, foldBtn, checkBtn, callBtn, raiseBtn, raiseSlider, raiseInput,
-    allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, bigBlindSelect,
+    allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, resetSoloBtn, bigBlindSelect,
     startingStackSelect, addBotBtn, removeBotBtn, botCountLabel, tableSizeHint,
     maxRebuysWrap, maxRebuysSelect,
     setupBar, skipBar, skipBtn, displayModeBar, displayDollarsBtn, displayBBBtn,
@@ -510,9 +510,15 @@ function renderControls(game, elements) {
       newHandBtn.disabled = game.replaying
         || lowChips
         || (game.onlineMode && !game.isHost);
-      newHandBtn.textContent = game.onlineMode ? 'Deal Next Hand' : 'Deal Hand';
+      newHandBtn.textContent = (game.onlineMode || game.soloSessionActive)
+        ? 'Deal Next Hand'
+        : 'Deal Hand';
     }
     if (replayHandBtn) replayHandBtn.disabled = !game.canReplayHand();
+    if (resetSoloBtn) {
+      const showReset = !game.onlineMode && game.soloSessionActive && betweenHands;
+      resetSoloBtn.classList.toggle('hidden', !showReset);
+    }
     return;
   }
 

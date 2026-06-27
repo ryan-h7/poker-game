@@ -1,5 +1,14 @@
 import { createDeck, shuffle, evaluateHand, compareHands, handName, formatHoleCards } from './engine.js';
 import { decideAction, AI_PERSONALITIES } from './ai.js';
+import {
+  initHandReadState,
+  onHandReadNewStreet,
+  observeAction,
+  buildActionReadContext,
+  updateStabShowdownReads,
+  finalizeHandReads,
+  resetOpponentProfiles,
+} from './opponent.js';
 
 const STARTING_CHIPS = 1000;
 export const MAX_TABLE_SIZE = 8;
@@ -71,6 +80,8 @@ export class PokerGame {
     this.inviteLink = '';
     this.tableDetailsOpen = false;
     this.localSocketId = null;
+    this.opponentProfiles = null;
+    this.soloSessionActive = false;
   }
 
   setRoomMembers(members) {
@@ -243,7 +254,7 @@ export class PokerGame {
   applyNetworkAction(seatIndex, action, amount = 0) {
     if (this.activeIndex !== seatIndex) return false;
     const player = this.players[seatIndex];
-    if (!player?.isHuman) return false;
+    if (!this.canActInBetting(player) || !player?.isHuman) return false;
     const result = this.applyAction(player, action, amount);
     if (!result) return false;
     if (action === 'fold' && this.phase === 'preflop') {
@@ -268,6 +279,7 @@ export class PokerGame {
         };
       }),
     ];
+    resetOpponentProfiles(this);
   }
 
   setPlayerCount(count) {
@@ -378,9 +390,10 @@ export class PokerGame {
   }
 
   exportSoloState() {
-    if (this.onlineMode || this.replaying) return null;
+    if (this.onlineMode || this.replaying || !this.soloSessionActive) return null;
     return {
       v: 1,
+      sessionActive: true,
       playerCount: this.playerCount,
       bigBlind: this.bigBlind,
       startingStack: this.startingStack,
@@ -414,15 +427,19 @@ export class PokerGame {
       })),
       handSnapshot: this.handSnapshot,
       lastHandReplay: this.lastHandReplay,
+      opponentProfiles: this.opponentProfiles
+        ? JSON.parse(JSON.stringify(this.opponentProfiles))
+        : null,
     };
   }
 
   restoreSoloState(state) {
-    if (!state || state.v !== 1) return false;
+    if (!state || state.v !== 1 || !state.sessionActive) return false;
     this.clearAiTimer();
     this.onlineMode = false;
     this.serverMode = false;
     this.replaying = false;
+    this.soloSessionActive = true;
     this.playerCount = state.playerCount;
     this.bigBlind = state.bigBlind;
     this.startingStack = state.startingStack;
@@ -447,6 +464,8 @@ export class PokerGame {
     this.handSnapshot = state.handSnapshot ?? null;
     this.lastHandReplay = state.lastHandReplay ?? null;
     this.currentHandEvents = null;
+    this.opponentProfiles = state.opponentProfiles ?? null;
+    this.handReadState = null;
     this.players = (state.players || []).map(p => ({
       id: p.id,
       name: p.name,
@@ -461,6 +480,36 @@ export class PokerGame {
     if (this.phase !== 'idle' && this.phase !== 'showdown') {
       this.processTurn();
     }
+    return true;
+  }
+
+  /** Clear solo session and return to a fresh table (chips, dealer, history). */
+  resetSoloSession() {
+    if (this.onlineMode) return false;
+    this.clearAiTimer();
+    this.soloSessionActive = false;
+    this.phase = 'idle';
+    this.deck = [];
+    this.community = [];
+    this.pot = 0;
+    this.currentBet = 0;
+    this.minRaise = this.bigBlind;
+    this.activeIndex = 0;
+    this.lastRaiser = -1;
+    this.handHistory = [];
+    this.actedThisRound = new Set();
+    this.preflopAggressor = -1;
+    this.bettingLine = createBettingLine();
+    this.humanFoldedPreflop = false;
+    this.fastForward = false;
+    this.handsRevealed = false;
+    this.replaying = false;
+    this.lastHandReplay = null;
+    this.handSnapshot = null;
+    this.currentHandEvents = null;
+    this.handReadState = null;
+    this.dealerIndex = 0;
+    this.resetPlayers();
     return true;
   }
 
@@ -720,6 +769,7 @@ export class PokerGame {
   startNewHand() {
     if (this.replaying) return;
     if (this.onlineMode && !this.serverMode) return;
+    if (!this.onlineMode) this.soloSessionActive = true;
     const active = this.players.filter(p => p.chips > 0);
     if (active.length < 2) {
       this.onMessage('Game over! Not enough players with chips.');
@@ -774,6 +824,7 @@ export class PokerGame {
     this.actedThisRound = new Set();
 
     this.handSnapshot = this.captureHandSnapshot();
+    initHandReadState(this);
     this.onMessage('New hand dealt.');
     this.onUpdate();
     this.processTurn();
@@ -800,11 +851,13 @@ export class PokerGame {
       return;
     }
 
+    if (!this.canActInBetting(player)) {
+      this.actedThisRound.add(this.activeIndex);
+      this.advanceTurn();
+      return;
+    }
+
     if (player.isHuman) {
-      if (player.folded) {
-        this.advanceTurn();
-        return;
-      }
       this.onUpdate();
       return;
     }
@@ -840,10 +893,16 @@ export class PokerGame {
     return this.players.filter(p => p.inHand && !p.folded);
   }
 
+  /** Still contesting the pot and able to bet, call, or raise. */
+  canActInBetting(player) {
+    return !!player && player.inHand && !player.folded && player.chips > 0;
+  }
+
   humanAction(action, amount = 0) {
     if (this.replaying || this.onlineMode) return;
     const player = this.players[this.activeIndex];
-    if (!player?.isHuman || this.phase === 'idle' || this.phase === 'showdown') return;
+    if (!this.canActInBetting(player) || !player.isHuman
+        || this.phase === 'idle' || this.phase === 'showdown') return;
 
     const result = this.applyAction(player, action, amount);
     if (!result) return;
@@ -898,7 +957,7 @@ export class PokerGame {
 
       this.activeIndex = this.nextActive(this.activeIndex);
       const player = this.players[this.activeIndex];
-      if (player.isHuman) break;
+      if (player.isHuman && this.canActInBetting(player)) break;
 
       this.executeAiTurn(player);
     }
@@ -910,9 +969,11 @@ export class PokerGame {
   applyAction(player, action, amount) {
     const toCall = this.currentBet - player.bet;
     const playerIndex = this.players.indexOf(player);
+    const readCtx = buildActionReadContext(this, playerIndex, action, toCall);
     const succeed = () => {
       if (!this.replaying) {
         this.recordEvent({ type: 'action', playerIndex, action, amount });
+        observeAction(this, playerIndex, action, readCtx);
       }
       return true;
     };
@@ -1001,12 +1062,15 @@ export class PokerGame {
       const toCall = this.currentBet - player.bet;
       if (toCall > 0) this.applyAction(player, 'call');
       else this.applyAction(player, 'check');
-    } else if (decision.isBluff || decision.isSemiBluff || decision.isCbet || decision.isBarrel) {
+    } else if (decision.isBluff || decision.isSemiBluff || decision.isCbet || decision.isBarrel
+      || decision.isCheckRaise || decision.isOverbet) {
       const i = this.handHistory.length - 1;
       if (i >= 0) {
         const tags = [];
         if (decision.isCbet) tags.push('c-bet');
         if (decision.isBarrel) tags.push(`barrel-${decision.barrelStreet || 2}`);
+        if (decision.isCheckRaise) tags.push('check-raise');
+        if (decision.isOverbet) tags.push('overbet');
         if (decision.isSemiBluff) tags.push('semi-bluff');
         else if (decision.isBluff) tags.push('bluff');
         if (tags.length) this.handHistory[i] += ` [${tags.join(', ')}]`;
@@ -1085,6 +1149,8 @@ export class PokerGame {
       return;
     }
 
+    onHandReadNewStreet(this);
+
     if (!this.replaying) {
       this.recordEvent({
         type: 'phase',
@@ -1130,7 +1196,9 @@ export class PokerGame {
     this.onMessage(endMessage);
 
     this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
+    updateStabShowdownReads(this);
     this.logRevealedHands();
+    finalizeHandReads(this);
     this.finalizeHandRecording('showdown', endMessage);
     this.onUpdate();
   }
@@ -1150,6 +1218,8 @@ export class PokerGame {
     this.phase = 'idle';
     this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
     this.logRevealedHands();
+    if (this.showBotHandsAtEnd) updateStabShowdownReads(this);
+    finalizeHandReads(this);
     this.finalizeHandRecording('idle', endMessage);
     this.onUpdate();
   }
@@ -1165,14 +1235,14 @@ export class PokerGame {
 
   isHumanTurn() {
     if (this.replaying) return false;
+    const p = this.players[this.activeIndex];
+    if (!this.canActInBetting(p)) return false;
     if (this.onlineMode) {
-      const p = this.players[this.activeIndex];
       return this.activeIndex === this.localSeatIndex
-        && p?.isHuman && !p.folded && p.inHand
+        && p.isHuman
         && this.phase !== 'idle' && this.phase !== 'showdown';
     }
-    const p = this.players[this.activeIndex];
-    return p?.isHuman && !p.folded && p.inHand && this.phase !== 'idle' && this.phase !== 'showdown';
+    return p.isHuman && this.phase !== 'idle' && this.phase !== 'showdown';
   }
 
   getCallAmount() {

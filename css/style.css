@@ -480,6 +480,16 @@ header h1 {
   cursor: not-allowed;
 }
 
+.btn-reset-solo {
+  background: transparent;
+  color: #f85149;
+  border: 1px solid #f8514966;
+  font-size: 0.9rem;
+  padding: 0.65rem 1.1rem;
+}
+
+.btn-reset-solo.hidden { display: none; }
+
 .message-bar {
   grid-column: 1;
   justify-self: center;

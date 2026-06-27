@@ -208,6 +208,57 @@ export function detectDraws(hole, community) {
   };
 }
 
+/**
+ * Classify one-pair strength relative to the board.
+ * @returns {{ tier: 'top'|'middle'|'bottom'|'overpair'|'underpair', pairRank: number, kickerStrength: number } | null}
+ */
+export function getPairTier(hole, community, made) {
+  if (!made || made.rank !== 1 || community.length < 3) return null;
+
+  const pairRank = made.kickers[0];
+  const boardRanks = [...new Set(community.map(c => c.value))].sort((a, b) => b - a);
+  const holeValues = hole.map(c => c.value).sort((a, b) => b - a);
+  const isPocket = holeValues[0] === holeValues[1];
+
+  if (isPocket && pairRank === holeValues[0] && pairRank >= boardRanks[0]) {
+    return { tier: 'overpair', pairRank, kickerStrength: 1 };
+  }
+
+  if (isPocket && !boardRanks.includes(pairRank)) {
+    return {
+      tier: 'underpair',
+      pairRank,
+      kickerStrength: Math.min(0.35, 0.12 + pairRank / 36),
+    };
+  }
+
+  const boardIdx = boardRanks.indexOf(pairRank);
+  if (boardIdx >= 0) {
+    let tier = 'middle';
+    if (boardIdx === 0) tier = 'top';
+    else if (boardIdx === boardRanks.length - 1) tier = 'bottom';
+
+    let kickerStrength = 0.35;
+    if (tier === 'top') {
+      const kicker = holeValues.find(v => v !== pairRank) ?? holeValues[1];
+      kickerStrength = Math.min(1, Math.max(0.15, (kicker - 2) / 12));
+    } else if (tier === 'bottom') {
+      kickerStrength = 0.2;
+    }
+    return { tier, pairRank, kickerStrength };
+  }
+
+  return { tier: 'bottom', pairRank, kickerStrength: 0.2 };
+}
+
+const PAIR_TIER_STRENGTH = {
+  overpair: 0.14,
+  top: 0.08,
+  middle: 0,
+  bottom: -0.07,
+  underpair: -0.11,
+};
+
 /** Bucket a hand for AI strategy: premium / marginal / draw / air. */
 export function classifyHand(hole, community) {
   if (community.length === 0) {
@@ -223,8 +274,22 @@ export function classifyHand(hole, community) {
 
   if (made.rank >= 3) return { category: 'premium', strength: madeStrength, draws, made };
   if (made.rank >= 1) {
-    const blended = Math.max(madeStrength, madeStrength + draws.drawStrength * 0.25);
-    return { category: made.rank >= 2 ? 'premium' : 'marginal', strength: blended, draws, made };
+    let pairTier = null;
+    let blended = Math.max(madeStrength, madeStrength + draws.drawStrength * 0.25);
+
+    if (made.rank === 1) {
+      pairTier = getPairTier(hole, community, made);
+      if (pairTier) {
+        blended += PAIR_TIER_STRENGTH[pairTier.tier] ?? 0;
+        if (pairTier.tier === 'top') blended += pairTier.kickerStrength * 0.05;
+        blended = Math.max(0.08, Math.min(0.38, blended));
+      }
+    }
+
+    const category = made.rank >= 2 || (pairTier?.tier === 'overpair' && blended >= 0.26)
+      ? 'premium'
+      : 'marginal';
+    return { category, strength: blended, draws, made, pairTier };
   }
 
   if (draws.drawStrength >= 0.35) {
@@ -248,4 +313,73 @@ export function boardTexture(community) {
   if (maxRank >= 13) return 'dry-high';
   if (maxRank <= 8) return 'dry-low';
   return 'neutral';
+}
+
+/**
+ * Blocker score for bluff / check-raise lines (0–1).
+ * Higher = more removal of villain value combos.
+ */
+export function analyzeBlockers(hole, community) {
+  if (community.length < 3) {
+    return {
+      score: 0,
+      nutFlushBlock: false,
+      straightBlock: false,
+      pairBlock: false,
+      details: [],
+    };
+  }
+
+  let score = 0;
+  const details = [];
+
+  const suitCounts = {};
+  for (const c of community) suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
+  const flushSuit = Object.entries(suitCounts).find(([, n]) => n >= 3)?.[0];
+  if (flushSuit) {
+    const holeFlush = hole.filter(c => c.suit === flushSuit);
+    if (holeFlush.some(c => c.value === 14)) {
+      score += 0.35;
+      details.push('nut-flush-block');
+    } else if (holeFlush.some(c => c.value === 13)) {
+      score += 0.2;
+      details.push('king-flush-block');
+    } else if (holeFlush.length) {
+      score += 0.1;
+      details.push('flush-block');
+    }
+  }
+
+  const rankCounts = {};
+  for (const c of community) rankCounts[c.value] = (rankCounts[c.value] || 0) + 1;
+  const pairedRank = Object.entries(rankCounts).find(([, n]) => n >= 2)?.[0];
+  if (pairedRank && hole.some(c => c.value === +pairedRank)) {
+    score += 0.15;
+    details.push('board-pair-block');
+  }
+
+  const boardValues = community.map(c => c.value);
+  const maxBoard = Math.max(...boardValues);
+  if (hole.some(c => c.value === maxBoard || c.value === maxBoard - 1)) {
+    score += 0.12;
+    details.push('straight-block');
+  }
+
+  if (maxBoard >= 12) {
+    if (hole.some(c => c.value === 14)) {
+      score += 0.1;
+      details.push('ace-block');
+    } else if (hole.some(c => c.value === 13)) {
+      score += 0.06;
+      details.push('king-block');
+    }
+  }
+
+  return {
+    score: Math.min(1, score),
+    nutFlushBlock: details.includes('nut-flush-block'),
+    straightBlock: details.includes('straight-block'),
+    pairBlock: details.includes('board-pair-block'),
+    details,
+  };
 }
