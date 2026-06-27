@@ -131,10 +131,17 @@ function getViewSeatIndex(game, seatIndex) {
   return (seatIndex - pivot + total) % total;
 }
 
+function isPortraitTable() {
+  return window.matchMedia('(orientation: portrait) and (max-width: 900px)').matches;
+}
+
 function getSeatPosition(index, total) {
+  const portrait = isPortraitTable();
+  const radiusX = portrait ? 28 : 38;
+  const radiusY = portrait ? 36 : 42;
   const angle = (Math.PI / 2) + (index * 2 * Math.PI) / total;
-  const x = 50 + 38 * Math.cos(angle);
-  const y = 50 + 42 * Math.sin(angle);
+  const x = 50 + radiusX * Math.cos(angle);
+  const y = 50 + radiusY * Math.sin(angle);
   return {
     left: `${x}%`,
     top: `${y}%`,
@@ -279,6 +286,7 @@ export function buildTableInfo(game) {
 }
 
 export function renderGame(game, elements) {
+  document.body.classList.toggle('layout-portrait', isPortraitTable());
   renderCommunity(game, elements.community);
   renderPlayers(game, elements.seats);
   renderPot(game, elements.pot);

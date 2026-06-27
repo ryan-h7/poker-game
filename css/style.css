@@ -1038,12 +1038,181 @@ body.invite-join-pending .multiplayer-panel {
     grid-row: auto;
     max-height: 160px;
   }
+}
 
-  .card {
-    width: 40px;
-    height: 56px;
+/* Portrait phones: tighter table so side seats stay on screen */
+@media (orientation: portrait) and (max-width: 900px) {
+  .app {
+    padding: 0.5rem;
+    gap: 0.5rem;
   }
 
-  .card-rank { font-size: 0.75rem; }
-  .card-suit { font-size: 0.9rem; }
+  header h1 {
+    font-size: 1.15rem;
+  }
+
+  .table-area {
+    padding: 0 0.1rem;
+    align-items: flex-start;
+    overflow: visible;
+  }
+
+  .table {
+    max-width: min(94vw, 360px);
+    aspect-ratio: 4 / 5;
+    margin: 0 auto;
+  }
+
+  .table-felt {
+    inset: 10% 10%;
+    gap: 0.35rem;
+    border-width: 4px;
+  }
+
+  .pot {
+    font-size: 0.85rem;
+    min-height: 1.1rem;
+  }
+
+  .community {
+    gap: 0.15rem;
+    transform: scale(0.88);
+    transform-origin: center;
+  }
+
+  .card,
+  .card-slot {
+    width: 32px;
+    height: 46px;
+  }
+
+  .card-rank { font-size: 0.62rem; }
+  .card-suit { font-size: 0.72rem; }
+
+  .card-back {
+    border-width: 1px;
+  }
+
+  .player-seat {
+    gap: 0.15rem;
+  }
+
+  .player-cards {
+    gap: 0.12rem;
+  }
+
+  .player-info {
+    min-width: 62px;
+    max-width: 88px;
+    padding: 0.18rem 0.35rem;
+    border-radius: 6px;
+    border-width: 1px;
+  }
+
+  .player-name {
+    font-size: 0.68rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80px;
+  }
+
+  .player-chips {
+    font-size: 0.62rem;
+  }
+
+  .player-bet,
+  .player-status {
+    font-size: 0.55rem;
+  }
+
+  .dealer-button {
+    width: 15px;
+    height: 15px;
+    font-size: 0.5rem;
+    top: -5px;
+    right: -5px;
+  }
+
+  .message-bar {
+    font-size: 0.85rem;
+    min-height: 1.2rem;
+    padding: 0.35rem;
+  }
+
+  .setup-bar {
+    gap: 0.4rem;
+    justify-content: center;
+  }
+
+  .setup-label {
+    font-size: 0.75rem;
+  }
+
+  .setup-select,
+  .btn-stepper {
+    font-size: 0.8rem;
+  }
+
+  .btn-deal,
+  .btn-friends {
+    font-size: 0.85rem;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .controls {
+    padding: 0.25rem;
+    gap: 0.45rem;
+  }
+
+  .action-row {
+    gap: 0.35rem;
+  }
+
+  .action-row .btn {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.65rem;
+  }
+
+  .raise-panel {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .online-toolbar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .table-details-panel {
+    max-width: 100%;
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Very narrow portrait */
+@media (orientation: portrait) and (max-width: 380px) {
+  .table {
+    max-width: 96vw;
+    aspect-ratio: 3 / 4;
+  }
+
+  .card,
+  .card-slot {
+    width: 28px;
+    height: 40px;
+  }
+
+  .card-rank { font-size: 0.55rem; }
+  .card-suit { font-size: 0.65rem; }
+
+  .player-info {
+    min-width: 54px;
+    max-width: 72px;
+  }
+
+  .player-name {
+    font-size: 0.62rem;
+    max-width: 66px;
+  }
 }

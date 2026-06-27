@@ -507,6 +507,15 @@ elements.allInBtn.addEventListener('click', () => submitRaise(true));
 
 renderGame(game, elements);
 
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => renderGame(game, elements), 100);
+});
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => renderGame(game, elements), 150);
+});
+
 const roomFromUrl = getRoomFromUrl();
 if (roomFromUrl) {
   pendingInviteRoomId = roomFromUrl;
