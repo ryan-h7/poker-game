@@ -17,6 +17,11 @@ export function createOpponentProfile() {
     passives: 0,
     limpOpps: 0,
     limps: 0,
+    pfrOpps: 0,
+    pfrRaises: 0,
+    preflopRaises: 0,
+    preflopCalls: 0,
+    preflopFolds: 0,
   };
 }
 
@@ -36,6 +41,9 @@ const DEFAULT_READ = {
   isLimpHappy: false,
   isoRaiseMult: 1,
   isoThresholdDrop: 0,
+  tightness: 0.5,
+  isTight: false,
+  isLoose: false,
 };
 
 export function ensureOpponentProfiles(game) {
@@ -91,6 +99,14 @@ export function observeAction(game, playerIndex, action, ctx) {
 
   if (ctx.countLimpOpp) profile.limpOpps += 1;
   if (ctx.isLimp) profile.limps += 1;
+  if (ctx.countPfrOpp) profile.pfrOpps += 1;
+  if (ctx.countPfrOpp && (action === 'raise' || action === 'allin')) profile.pfrRaises += 1;
+
+  if (game.phase === 'preflop') {
+    if (action === 'raise' || action === 'allin') profile.preflopRaises += 1;
+    else if (action === 'call' && ctx.toCall > 0) profile.preflopCalls += 1;
+    else if (action === 'fold' && ctx.toCall > 0) profile.preflopFolds += 1;
+  }
 
   if (ctx.countCbetOpp) {
     profile.cbetOpps += 1;
@@ -154,6 +170,36 @@ export function finalizeHandReads(game) {
   game.handReadState = null;
 }
 
+/** 0 = very loose, 1 = very tight (session sample). */
+export function computeTightness(profile) {
+  if (!profile || profile.hands < 2) return 0.5;
+
+  const hands = profile.hands;
+  const vpip = (profile.preflopRaises + profile.limps + profile.preflopCalls) / hands;
+  const pfr = profile.pfrOpps >= 3
+    ? profile.pfrRaises / profile.pfrOpps
+    : profile.preflopRaises / hands;
+  const foldFreq = profile.preflopFolds
+    / Math.max(1, profile.preflopFolds + profile.preflopCalls + profile.preflopRaises);
+
+  const looseness = Math.min(1, vpip * 1.35 + (1 - pfr) * 0.45 + (1 - foldFreq) * 0.15);
+  return Math.max(0, Math.min(1, 1 - looseness));
+}
+
+/** Preflop raise size multiplier from actor style + villain/table tightness. */
+export function getPreflopSizeMult(game, playerIndex, aggression, tableTightness = 0.5) {
+  const selfTightness = 1 - aggression;
+  let mult = 1;
+
+  // Tight players raise bigger, loose players smaller
+  mult += (selfTightness - 0.5) * 0.26;
+
+  // Vs tight table/villain: size up (fold equity); vs loose: size down (induce)
+  mult += (tableTightness - 0.5) * 0.24;
+
+  return Math.max(0.84, Math.min(1.2, mult));
+}
+
 export function getOpponentRead(game, opponentIndex) {
   if (opponentIndex < 0) return { ...DEFAULT_READ };
   ensureOpponentProfiles(game);
@@ -190,6 +236,10 @@ export function getOpponentRead(game, opponentIndex) {
   const isoRaiseMult = isLimpHappy ? 1.28 : 1;
   const isoThresholdDrop = isLimpHappy ? 0.07 + Math.min(0.05, (limpFreq - 0.34) * 0.25) : 0;
 
+  const tightness = computeTightness(p);
+  const isTight = tightness >= 0.58;
+  const isLoose = tightness <= 0.38;
+
   return {
     stabFreq: stabFreq ?? DEFAULT_READ.stabFreq,
     isStabHappy,
@@ -206,6 +256,9 @@ export function getOpponentRead(game, opponentIndex) {
     isLimpHappy,
     isoRaiseMult,
     isoThresholdDrop,
+    tightness,
+    isTight,
+    isLoose,
   };
 }
 
@@ -228,6 +281,7 @@ export function getLimpedPotRead(game, playerIndex) {
     isLimpPot: false,
     limperCount: 0,
     avgLimpFreq: 0.22,
+    avgTightness: 0.5,
     isLimpHappy: false,
     isoThresholdDrop: 0,
     isoRaiseMult: 1,
@@ -246,6 +300,7 @@ export function getLimpedPotRead(game, playerIndex) {
   if (!limpers.length) return empty;
 
   const avgLimpFreq = limpers.reduce((s, r) => s + r.limpFreq, 0) / limpers.length;
+  const avgTightness = limpers.reduce((s, r) => s + r.tightness, 0) / limpers.length;
   const isLimpHappy = avgLimpFreq > 0.32 || limpers.some(r => r.isLimpHappy);
   const isoThresholdDrop = isLimpHappy
     ? 0.05 + Math.min(0.08, (avgLimpFreq - 0.28) * 0.22)
@@ -255,6 +310,7 @@ export function getLimpedPotRead(game, playerIndex) {
     isLimpPot: true,
     limperCount: limpers.length,
     avgLimpFreq,
+    avgTightness,
     isLimpHappy,
     isoThresholdDrop,
     isoRaiseMult: isLimpHappy ? 1.22 + limpers.length * 0.06 : 1.08,
@@ -278,6 +334,7 @@ export function buildActionReadContext(game, playerIndex, action, toCall) {
   const facingBlindsOnly = isPreflop && toCall > 0 && game.currentBet === game.bigBlind;
   const countLimpOpp = facingBlindsOnly;
   const isLimp = countLimpOpp && action === 'call';
+  const countPfrOpp = isPreflop && game.currentBet === game.bigBlind && toCall <= game.bigBlind;
 
   return {
     toCall,
@@ -287,5 +344,6 @@ export function buildActionReadContext(game, playerIndex, action, toCall) {
     countCbetOpp,
     countLimpOpp,
     isLimp,
+    countPfrOpp,
   };
 }

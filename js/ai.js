@@ -1,7 +1,7 @@
 import {
   evaluateHand, compareHands, classifyHand, boardTexture, analyzeBlockers,
 } from './engine.js';
-import { getOpponentRead, getPrimaryVillain, getLimpedPotRead } from './opponent.js';
+import { getOpponentRead, getPrimaryVillain, getLimpedPotRead, getPreflopSizeMult } from './opponent.js';
 
 export function getPositionTier(playerIndex, dealerIndex, totalPlayers) {
   const afterBtn = (playerIndex - dealerIndex + totalPlayers) % totalPlayers;
@@ -99,6 +99,54 @@ function coldCallTightness(pressure) {
   if (pressure === 1) return 0.78;
   if (pressure === 2) return 0.58;
   return 0.42;
+}
+
+/** ±spread random multiplier for sizing (e.g. 0.92–1.08 at spread 0.08). */
+function sizeJitter(spread = 0.1) {
+  return 1 - spread + Math.random() * spread * 2;
+}
+
+function clampRaiseTo(game, player, target) {
+  const minTarget = game.currentBet + game.minRaise;
+  const maxTarget = player.bet + player.chips;
+  return Math.min(maxTarget, Math.max(minTarget, Math.floor(target)));
+}
+
+/**
+ * Preflop raise-to in chips (BB-based, jittered). Postflop uses pot fractions separately.
+ */
+function preflopRaiseTo(game, player, {
+  facing, aggression, limpRead, potCtx, mode = 'raise', playerIndex,
+}) {
+  const bb = game.bigBlind;
+  const openBB = game.currentBet / bb;
+  const limpers = Math.max(limpRead?.limperCount ?? 0, potCtx.callers);
+  const punish = limpRead?.isLimpHappy ? 0.25 : 0;
+
+  const villain = getPrimaryVillain(game, playerIndex);
+  const villainTightness = villain >= 0 ? getOpponentRead(game, villain).tightness : 0.5;
+  const tableTightness = limpRead?.isLimpPot
+    ? limpRead.avgTightness
+    : villainTightness;
+  const styleMult = getPreflopSizeMult(game, playerIndex, aggression, tableTightness);
+
+  let targetBB;
+  if (mode === 'iso') {
+    targetBB = (2.75 + limpers * 0.7 + punish) * sizeJitter(0.12) * styleMult;
+  } else if (!facing.facing) {
+    targetBB = (2.15 + aggression * 0.35 + Math.random() * 0.35) * sizeJitter(0.1) * styleMult;
+  } else if (openBB <= 2.5) {
+    const mult = (3.0 + aggression * 0.55 + Math.random() * 0.85) * sizeJitter(0.14) * styleMult;
+    return clampRaiseTo(game, player, openBB * bb * mult);
+  } else if (openBB <= 4) {
+    const mult = (2.25 + aggression * 0.45 + Math.random() * 0.55) * sizeJitter(0.12) * styleMult;
+    return clampRaiseTo(game, player, game.currentBet * mult);
+  } else {
+    const mult = (2.1 + aggression * 0.4 + Math.random() * 0.75) * sizeJitter(0.18) * styleMult;
+    return clampRaiseTo(game, player, game.currentBet * mult);
+  }
+
+  return clampRaiseTo(game, player, targetBB * bb);
 }
 
 export const PREFLOP_RANGES = {
@@ -640,36 +688,25 @@ export function decideAction(player, game) {
   };
 
   const tryRaise = (isBluff, isSemiBluff = false) => {
-    const amt = raiseSize();
-    if (amt > 0 && player.chips > 0 && (canCheck ? true : amt > toCall && player.chips > toCall)) {
-      return {
-        action: 'raise',
-        amount: player.bet + (canCheck ? amt : Math.min(amt, player.chips)),
-        isBluff,
-        isSemiBluff,
-      };
-    }
-    return null;
+    const target = isPreflop
+      ? preflopRaiseTo(game, player, {
+        facing, aggression, limpRead, potCtx, mode: 'raise', playerIndex,
+      })
+      : (() => {
+        const amt = raiseSize();
+        return player.bet + (canCheck ? amt : Math.min(amt, player.chips));
+      })();
+    if (target <= player.bet || target > player.bet + player.chips) return null;
+    if (!canCheck && target <= game.currentBet) return null;
+    if (!canCheck && target - player.bet > player.chips) return null;
+    return { action: 'raise', amount: target, isBluff, isSemiBluff };
   };
 
   const tryIsoRaise = (isBluff, isSemiBluff = false) => {
-    const bb = game.bigBlind;
-    const limpers = Math.max(limpRead?.limperCount ?? 0, potCtx.callers);
-    const sizeMult = limpRead?.isoSizeMult ?? 1;
-    let target;
-    if (canCheck) {
-      const openSize = Math.floor((3 + limpers * 1.2) * bb * sizeMult);
-      target = player.bet + Math.max(bb * 2, openSize);
-    } else {
-      const multiplier = 3.2 + aggression * 1.1 + limpers * 0.5 + (limpRead?.isLimpHappy ? 0.4 : 0);
-      target = Math.floor(game.currentBet * multiplier + limpers * bb * 0.6);
-    }
-    target = Math.min(
-      player.bet + player.chips,
-      Math.max(game.currentBet + game.minRaise, target),
-    );
-    if (!canCheck && target <= game.currentBet) return null;
-    if (target <= player.bet) return null;
+    const target = preflopRaiseTo(game, player, {
+      facing, aggression, limpRead, potCtx, mode: 'iso', playerIndex,
+    });
+    if (target <= player.bet || target <= game.currentBet) return null;
     return { action: 'raise', amount: target, isBluff, isSemiBluff, isIso: true };
   };
 
