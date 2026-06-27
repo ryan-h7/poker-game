@@ -186,6 +186,20 @@ function isOnline() {
   return inOnlineRoom && game.onlineMode;
 }
 
+async function copyInviteLink(link) {
+  if (!link) return false;
+  try {
+    await navigator.clipboard.writeText(link);
+    return true;
+  } catch {
+    if (elements.inviteLinkInput) {
+      elements.inviteLinkInput.value = link;
+      elements.inviteLinkInput.select();
+    }
+    return false;
+  }
+}
+
 async function joinRoom(roomId, fromModal = false) {
   const code = normalizeRoomCode(roomId);
   if (!code) {
@@ -287,7 +301,10 @@ elements.createRoomBtn.addEventListener('click', async () => {
     game.roomStatus = 'lobby';
     game.lobbyPanelOpen = false;
     game.localSeatIndex = 0;
-    setMessage(elements.message, 'Room created! Share the invite link.');
+    const copied = await copyInviteLink(res.inviteLink || '');
+    setMessage(elements.message, copied
+      ? 'Room created! Invite link copied to clipboard.'
+      : 'Room created! Copy the invite link from Table details.');
     renderGame(game, elements);
   } catch (err) {
     setMessage(elements.message, err.message);
@@ -385,13 +402,10 @@ function leaveOnlineRoom() {
 elements.copyLinkBtn.addEventListener('click', async () => {
   const link = elements.inviteLinkInput?.value;
   if (!link) return;
-  try {
-    await navigator.clipboard.writeText(link);
-    setMessage(elements.message, 'Invite link copied!');
-  } catch {
-    elements.inviteLinkInput?.select();
-    setMessage(elements.message, 'Copy the link manually (Ctrl+C).');
-  }
+  const copied = await copyInviteLink(link);
+  setMessage(elements.message, copied
+    ? 'Invite link copied!'
+    : 'Copy the link manually (Ctrl+C).');
 });
 
 elements.addBotBtn?.addEventListener('click', async () => {
