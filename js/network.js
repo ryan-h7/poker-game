@@ -73,6 +73,10 @@ export class NetworkClient {
     return res;
   }
 
+  transferHost(targetSocketId) {
+    return this.emit('transfer-host', { targetSocketId });
+  }
+
   updateSettings(settings) {
     return this.emit('update-settings', settings);
   }

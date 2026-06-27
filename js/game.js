@@ -68,6 +68,7 @@ export class PokerGame {
     this.roomId = null;
     this.inviteLink = '';
     this.tableDetailsOpen = false;
+    this.localSocketId = null;
   }
 
   setRoomMembers(members) {

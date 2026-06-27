@@ -108,6 +108,7 @@ const network = new NetworkClient({
       game.localSeatIndex = me.seatIndex;
       network.seatIndex = me.seatIndex;
     }
+    game.localSocketId = network.socket?.id ?? null;
     game.playerCount = lobby.settings.playerCount;
     game.bigBlind = lobby.settings.bigBlind;
     game.startingStack = lobby.settings.startingStack ?? 1000;
@@ -118,6 +119,7 @@ const network = new NetworkClient({
     renderTableDetails(elements, {
       roomId: lobby.roomId,
       isHost: lobby.isHost,
+      localSocketId: network.socket?.id,
       inviteLink: lobby.inviteLink,
       members: lobby.members,
       settings: lobby.settings,
@@ -136,6 +138,7 @@ const network = new NetworkClient({
     game.applyNetworkState(state);
     game.isHost = state.isHost;
     game.localSeatIndex = state.localSeatIndex;
+    game.localSocketId = network.socket?.id ?? null;
     game.roomStatus = state.status || 'active';
     game.lobbyPanelOpen = false;
     if (state.inviteLink) game.inviteLink = state.inviteLink;
@@ -272,6 +275,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     renderTableDetails(elements, {
       roomId: res.roomId,
       isHost: true,
+      localSocketId: network.socket?.id,
       inviteLink: res.inviteLink,
       members,
       settings: { playerCount, bigBlind, startingStack },
@@ -344,6 +348,20 @@ function toggleTableDetails(forceOpen) {
 
 elements.tableDetailsBtn?.addEventListener('click', () => toggleTableDetails());
 elements.closeTableDetailsBtn?.addEventListener('click', () => toggleTableDetails(false));
+
+elements.lobbyPlayers?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-make-host');
+  if (!btn || !game.isHost) return;
+  const targetId = btn.dataset.memberId;
+  if (!targetId) return;
+  btn.disabled = true;
+  try {
+    const res = await network.transferHost(targetId);
+    if (!res.ok) setMessage(elements.message, res.error || 'Could not transfer host.');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 function leaveOnlineRoom() {
   network.leaveRoom();

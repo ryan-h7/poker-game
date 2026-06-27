@@ -206,12 +206,18 @@ export function renderTableDetails(elements, info) {
   }
 
   if (lobbyPlayers && info.members) {
-    lobbyPlayers.innerHTML = info.members.map(m => `
+    const canTransfer = info.isHost && info.members.length > 1;
+    lobbyPlayers.innerHTML = info.members.map(m => {
+      const showMakeHost = canTransfer && m.id !== info.localSocketId && !m.isHost;
+      return `
       <li class="lobby-player">
-        <span>${m.name}${m.isHost ? ' (host)' : ''}</span>
-        <span class="lobby-seat">Seat ${m.seatIndex + 1}</span>
-      </li>
-    `).join('');
+        <span class="lobby-player-name">${m.name}${m.isHost ? ' (host)' : ''}</span>
+        <span class="lobby-player-actions">
+          ${showMakeHost ? `<button type="button" class="btn-make-host" data-member-id="${m.id}">Make host</button>` : ''}
+          <span class="lobby-seat">Seat ${m.seatIndex + 1}</span>
+        </span>
+      </li>`;
+    }).join('');
   }
 
   if (elements.startingStackSelect && info.settings?.startingStack) {
@@ -260,6 +266,7 @@ export function buildTableInfo(game) {
   return {
     roomId: game.roomId,
     isHost: game.isHost,
+    localSocketId: game.localSocketId,
     inviteLink: game.inviteLink,
     members,
     settings: {

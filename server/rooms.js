@@ -130,6 +130,29 @@ class Room {
     }
   }
 
+  assignHost(requesterId, targetSocketId) {
+    if (requesterId !== this.hostId) {
+      return { ok: false, error: 'Only the host can transfer host.' };
+    }
+    if (targetSocketId === requesterId) {
+      return { ok: false, error: 'You are already the host.' };
+    }
+    const target = this.members.get(targetSocketId);
+    if (!target) return { ok: false, error: 'Player not in room.' };
+    if (this.game && !this.canChangeSettings()) {
+      return { ok: false, error: 'Wait for the current hand to finish.' };
+    }
+
+    const requester = this.members.get(requesterId);
+    for (const m of this.members.values()) m.isHost = false;
+    this.hostId = targetSocketId;
+    target.isHost = true;
+    const fromName = requester?.name || 'Host';
+    this.message = `${fromName} made ${target.name} the host.`;
+    this.syncTable();
+    return { ok: true };
+  }
+
   transferHost(leftName) {
     for (const m of this.members.values()) m.isHost = false;
     const sorted = [...this.members.values()].sort((a, b) => a.seatIndex - b.seatIndex);

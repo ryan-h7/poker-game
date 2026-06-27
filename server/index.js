@@ -77,6 +77,15 @@ io.on('connection', (socket) => {
     cb?.(room.handleAction(socket.id, action, amount ?? 0));
   });
 
+  socket.on('transfer-host', ({ targetSocketId }, cb) => {
+    const room = rooms.get(socket.data.roomId);
+    if (!room) {
+      cb?.({ ok: false, error: 'Not in a room.' });
+      return;
+    }
+    cb?.(room.assignHost(socket.id, targetSocketId));
+  });
+
   socket.on('leave-room', () => {
     const roomId = socket.data.roomId;
     if (!roomId) return;
