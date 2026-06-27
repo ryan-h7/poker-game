@@ -162,3 +162,26 @@ export function loadRoomSession() {
 export function clearRoomSession() {
   try { sessionStorage.removeItem(ROOM_SESSION_KEY); } catch { /* ignore */ }
 }
+
+const SOLO_STATE_KEY = 'poker-solo-state';
+
+export function saveSoloState(state) {
+  if (!state) return;
+  try {
+    sessionStorage.setItem(SOLO_STATE_KEY, JSON.stringify(state));
+  } catch { /* ignore */ }
+}
+
+export function loadSoloState() {
+  try {
+    const raw = sessionStorage.getItem(SOLO_STATE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function clearSoloState() {
+  try { sessionStorage.removeItem(SOLO_STATE_KEY); } catch { /* ignore */ }
+}

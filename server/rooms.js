@@ -50,6 +50,64 @@ class Room {
     this.game = null;
     this.message = 'Waiting for players…';
     this.disconnectGraceMs = 90_000;
+    this.disconnectTurnGraceMs = 45_000;
+  }
+
+  isMidHand() {
+    return this.game
+      && this.game.phase !== 'idle'
+      && this.game.phase !== 'showdown';
+  }
+
+  memberAtSeat(seatIndex) {
+    return this.allMembers().find(m => m.seatIndex === seatIndex) || null;
+  }
+
+  clearMemberTimers(member) {
+    if (!member) return;
+    if (member.disconnectTimer) {
+      clearTimeout(member.disconnectTimer);
+      member.disconnectTimer = null;
+    }
+    if (member.turnTimer) {
+      clearTimeout(member.turnTimer);
+      member.turnTimer = null;
+    }
+  }
+
+  scheduleDisconnectTurnFold(member) {
+    if (!member || member.socketId || !this.isMidHand()) return;
+    const seat = member.seatIndex;
+    if (this.game.activeIndex !== seat) return;
+    const player = this.game.players[seat];
+    if (!player?.isHuman || player.folded || !player.inHand) return;
+
+    this.clearMemberTimers(member);
+    member.turnTimer = setTimeout(() => {
+      member.turnTimer = null;
+      if (member.socketId || !this.game) return;
+      if (this.game.activeIndex !== seat) return;
+      const p = this.game.players[seat];
+      if (!p || p.folded || this.game.phase === 'idle' || this.game.phase === 'showdown') return;
+      this.game.applyAction(p, 'fold');
+      this.game.handHistory.push(`${p.name} disconnected (folded)`);
+      this.game.actedThisRound.add(seat);
+      this.game.afterAction();
+      this.message = `${p.name} was folded after disconnect.`;
+      this.broadcastGameState();
+      this.checkDisconnectedActiveTurn();
+    }, this.disconnectTurnGraceMs);
+  }
+
+  checkDisconnectedActiveTurn() {
+    if (!this.isMidHand()) return;
+    const member = this.memberAtSeat(this.game.activeIndex);
+    if (member && !member.socketId) this.scheduleDisconnectTurnFold(member);
+  }
+
+  pushTableState() {
+    if (this.game) this.broadcastGameState();
+    else this.broadcastLobby();
   }
 
   getMemberBySocket(socketId) {
@@ -132,6 +190,7 @@ class Room {
       name: displayName,
       seatIndex: seat.seatIndex,
       disconnectTimer: null,
+      turnTimer: null,
       rebuyCount: 0,
     };
     this.membersByToken.set(token, member);
@@ -160,6 +219,10 @@ class Room {
       clearTimeout(member.disconnectTimer);
       member.disconnectTimer = null;
     }
+    if (member.turnTimer) {
+      clearTimeout(member.turnTimer);
+      member.turnTimer = null;
+    }
 
     const displayName = String(name || member.name || 'Player').trim().slice(0, 16) || member.name;
     member.name = displayName;
@@ -170,7 +233,8 @@ class Room {
     socket.data.memberToken = token;
 
     this.message = `${displayName} reconnected.`;
-    this.syncTable();
+    this.pushTableState();
+    this.checkDisconnectedActiveTurn();
     return {
       ok: true,
       roomId: this.id,
@@ -184,6 +248,10 @@ class Room {
     const member = this.getMemberBySocket(socketId);
     if (!member) return;
 
+    if (member.turnTimer) {
+      clearTimeout(member.turnTimer);
+      member.turnTimer = null;
+    }
     member.socketId = null;
     if (member.disconnectTimer) clearTimeout(member.disconnectTimer);
     member.disconnectTimer = setTimeout(() => {
@@ -192,8 +260,8 @@ class Room {
     }, this.disconnectGraceMs);
 
     this.message = `${member.name} disconnected.`;
-    if (this.game) this.broadcastGameState();
-    else this.broadcastLobby();
+    this.pushTableState();
+    this.scheduleDisconnectTurnFold(member);
   }
 
   removeMember(socketId) {
@@ -206,14 +274,27 @@ class Room {
     const member = this.membersByToken.get(token);
     if (!member) return;
 
-    if (member.disconnectTimer) {
-      clearTimeout(member.disconnectTimer);
-      member.disconnectTimer = null;
+    const seat = member.seatIndex;
+
+    if (timedOut && this.isMidHand()) {
+      this.clearMemberTimers(member);
+      const player = this.game.players[seat];
+      if (player && !player.folded) {
+        this.game.applyAction(player, 'fold');
+        this.game.handHistory.push(`${player.name} timed out (folded)`);
+        this.game.actedThisRound.add(seat);
+        this.game.afterAction();
+      }
+      this.message = `${member.name} was folded after a long disconnect.`;
+      this.pushTableState();
+      this.checkDisconnectedActiveTurn();
+      return;
     }
+
+    this.clearMemberTimers(member);
 
     const leftName = member.name;
     const wasHost = token === this.hostToken;
-    const seat = member.seatIndex;
     this.membersByToken.delete(token);
     if (this.membersByToken.size === 0) {
       this.onEmpty?.(this.id);
@@ -334,6 +415,7 @@ class Room {
     this.game.startNewHand();
     this.message = this.game._lastMessage || 'New hand dealt.';
     this.broadcastGameState();
+    this.checkDisconnectedActiveTurn();
     return { ok: true };
   }
 
@@ -393,6 +475,7 @@ class Room {
 
     this.message = this.game._lastMessage || this.message;
     this.broadcastGameState();
+    this.checkDisconnectedActiveTurn();
     return { ok: true };
   }
 

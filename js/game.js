@@ -128,7 +128,8 @@ export class PokerGame {
     this.players = [];
     for (let i = 0; i < playerCount; i++) {
       const member = bySeat.get(i);
-      const chips = shouldReset ? stack : (prev[i]?.chips ?? stack);
+      const prevP = prev[i];
+      const chips = shouldReset ? stack : (prevP?.chips ?? stack);
       if (member) {
         this.players.push({
           id: i,
@@ -136,10 +137,10 @@ export class PokerGame {
           isHuman: true,
           sessionId: member.id,
           chips,
-          hole: [],
-          bet: 0,
-          folded: false,
-          inHand: true,
+          hole: shouldReset ? [] : cloneCards(prevP?.hole ?? []),
+          bet: shouldReset ? 0 : (prevP?.bet ?? 0),
+          folded: shouldReset ? false : (prevP?.folded ?? false),
+          inHand: shouldReset ? true : (prevP?.inHand ?? true),
         });
       } else {
         const ai = AI_PERSONALITIES[i % AI_PERSONALITIES.length];
@@ -149,10 +150,10 @@ export class PokerGame {
           isHuman: false,
           personality: ai,
           chips,
-          hole: [],
-          bet: 0,
-          folded: false,
-          inHand: true,
+          hole: shouldReset ? [] : cloneCards(prevP?.hole ?? []),
+          bet: shouldReset ? 0 : (prevP?.bet ?? 0),
+          folded: shouldReset ? false : (prevP?.folded ?? false),
+          inHand: shouldReset ? true : (prevP?.inHand ?? true),
         });
       }
     }
@@ -374,6 +375,93 @@ export class PokerGame {
     if (this.maxRebuys === 0) return 0;
     if (this.maxRebuys < 0) return null;
     return Math.max(0, this.maxRebuys - this.localRebuyCount);
+  }
+
+  exportSoloState() {
+    if (this.onlineMode || this.replaying) return null;
+    return {
+      v: 1,
+      playerCount: this.playerCount,
+      bigBlind: this.bigBlind,
+      startingStack: this.startingStack,
+      dealerIndex: this.dealerIndex,
+      phase: this.phase,
+      deck: cloneCards(this.deck),
+      community: cloneCards(this.community),
+      pot: this.pot,
+      currentBet: this.currentBet,
+      minRaise: this.minRaise,
+      activeIndex: this.activeIndex,
+      lastRaiser: this.lastRaiser,
+      handHistory: [...this.handHistory],
+      actedThisRound: [...this.actedThisRound],
+      preflopAggressor: this.preflopAggressor,
+      bettingLine: JSON.parse(JSON.stringify(this.bettingLine)),
+      humanFoldedPreflop: this.humanFoldedPreflop,
+      handsRevealed: this.handsRevealed,
+      showBotHandsAtEnd: this.showBotHandsAtEnd,
+      showInBB: this.showInBB,
+      players: this.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        isHuman: p.isHuman,
+        personality: p.personality,
+        chips: p.chips,
+        hole: cloneCards(p.hole),
+        bet: p.bet,
+        folded: p.folded,
+        inHand: p.inHand,
+      })),
+      handSnapshot: this.handSnapshot,
+      lastHandReplay: this.lastHandReplay,
+    };
+  }
+
+  restoreSoloState(state) {
+    if (!state || state.v !== 1) return false;
+    this.clearAiTimer();
+    this.onlineMode = false;
+    this.serverMode = false;
+    this.replaying = false;
+    this.playerCount = state.playerCount;
+    this.bigBlind = state.bigBlind;
+    this.startingStack = state.startingStack;
+    this.dealerIndex = state.dealerIndex;
+    this.phase = state.phase;
+    this.deck = cloneCards(state.deck || []);
+    this.community = cloneCards(state.community || []);
+    this.pot = state.pot;
+    this.currentBet = state.currentBet;
+    this.minRaise = state.minRaise;
+    this.activeIndex = state.activeIndex;
+    this.lastRaiser = state.lastRaiser;
+    this.handHistory = [...(state.handHistory || [])];
+    this.actedThisRound = new Set(state.actedThisRound || []);
+    this.preflopAggressor = state.preflopAggressor ?? -1;
+    this.bettingLine = JSON.parse(JSON.stringify(state.bettingLine || createBettingLine()));
+    this.humanFoldedPreflop = !!state.humanFoldedPreflop;
+    this.fastForward = false;
+    this.handsRevealed = !!state.handsRevealed;
+    this.showBotHandsAtEnd = !!state.showBotHandsAtEnd;
+    this.showInBB = !!state.showInBB;
+    this.handSnapshot = state.handSnapshot ?? null;
+    this.lastHandReplay = state.lastHandReplay ?? null;
+    this.currentHandEvents = null;
+    this.players = (state.players || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      isHuman: p.isHuman,
+      personality: p.personality,
+      chips: p.chips,
+      hole: cloneCards(p.hole || []),
+      bet: p.bet,
+      folded: p.folded,
+      inHand: p.inHand,
+    }));
+    if (this.phase !== 'idle' && this.phase !== 'showdown') {
+      this.processTurn();
+    }
+    return true;
   }
 
   captureHandSnapshot() {

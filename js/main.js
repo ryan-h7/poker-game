@@ -5,7 +5,7 @@ import {
   showMultiplayerEntry, hideMultiplayerPanel,
   showJoinModal, hideJoinModal, setJoinModalError, renderTableDetails,
 } from './ui.js';
-import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode, loadRoomSession, clearRoomSession } from './network.js';
+import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode, loadRoomSession, clearRoomSession, saveSoloState, loadSoloState, clearSoloState } from './network.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -78,6 +78,18 @@ let showBotHandsAtEnd = false;
 let showInBB = false;
 let inOnlineRoom = false;
 let pendingInviteRoomId = null;
+let soloSaveTimer;
+
+function scheduleSoloSave() {
+  if (game.onlineMode || game.replaying) return;
+  clearTimeout(soloSaveTimer);
+  soloSaveTimer = setTimeout(() => {
+    if (game.onlineMode || game.replaying) return;
+    const state = game.exportSoloState();
+    if (state && state.phase !== 'idle') saveSoloState(state);
+    else clearSoloState();
+  }, 250);
+}
 
 try {
   autoSkipWhenFolded = localStorage.getItem('poker-auto-skip') === '1';
@@ -93,7 +105,10 @@ try {
 } catch { /* ignore */ }
 
 const game = new PokerGame(
-  () => renderGame(game, elements),
+  () => {
+    renderGame(game, elements);
+    scheduleSoloSave();
+  },
   (msg) => setMessage(elements.message, msg),
 );
 game.setShowBotHandsAtEnd(showBotHandsAtEnd);
@@ -213,6 +228,7 @@ async function joinRoom(roomId, fromModal = false) {
     else setMessage(elements.message, 'Enter a room code to join.');
     return;
   }
+  clearSoloState();
   const btn = fromModal ? elements.joinModalSubmit : elements.joinRoomBtn;
   if (btn) btn.disabled = true;
   if (fromModal) setJoinModalError(elements, '');
@@ -276,6 +292,7 @@ elements.playFriendsBtn?.addEventListener('click', () => {
 
 elements.createRoomBtn.addEventListener('click', async () => {
   try {
+    clearSoloState();
     const res = await network.createRoom(getPlayerName(), getTableSettings());
     const playerCount = game.playerCount;
     const bigBlind = parseInt(elements.bigBlindSelect.value, 10);
@@ -562,6 +579,23 @@ window.addEventListener('orientationchange', () => {
   setTimeout(() => renderGame(game, elements), 150);
 });
 
+async function tryRestoreSoloSession() {
+  const state = loadSoloState();
+  if (!state || state.phase === 'idle') {
+    clearSoloState();
+    return false;
+  }
+  if (!game.restoreSoloState(state)) {
+    clearSoloState();
+    return false;
+  }
+  game.setShowBotHandsAtEnd(showBotHandsAtEnd);
+  game.setShowInBB(showInBB);
+  setMessage(elements.message, 'Restored your hand.');
+  renderGame(game, elements);
+  return true;
+}
+
 async function tryRestoreOnlineSession() {
   const session = loadRoomSession();
   if (!session) return false;
@@ -578,6 +612,7 @@ async function tryRestoreOnlineSession() {
 const roomFromUrl = getRoomFromUrl();
 (async () => {
   if (await tryRestoreOnlineSession()) return;
+  if (await tryRestoreSoloSession()) return;
   if (roomFromUrl) {
     pendingInviteRoomId = roomFromUrl;
     showJoinModal(elements, roomFromUrl, { invited: true });
