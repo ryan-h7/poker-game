@@ -135,48 +135,13 @@ function isPortraitTable() {
   return window.matchMedia('(orientation: portrait) and (max-width: 900px)').matches;
 }
 
-function getSeatAngle(viewIndex, total) {
-  return (Math.PI / 2) + (viewIndex * 2 * Math.PI) / total;
-}
-
-function getSeatSideClass(viewIndex, total) {
-  if (!isPortraitTable()) return '';
-  const cos = Math.cos(getSeatAngle(viewIndex, total));
-  if (cos < -0.35) return 'seat-side-left';
-  if (cos > 0.35) return 'seat-side-right';
-  return '';
-}
-
 function getSeatPosition(index, total) {
   const portrait = isPortraitTable();
-  const angle = getSeatAngle(index, total);
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-
-  if (portrait) {
-    const radiusY = 34;
-    let y = 50 + radiusY * sin;
-    y = Math.max(8, Math.min(92, y));
-
-    if (Math.abs(cos) > 0.35) {
-      const leftSide = cos < 0;
-      return {
-        left: leftSide ? '0%' : '100%',
-        top: `${y}%`,
-        transform: leftSide ? 'translate(0%, -50%)' : 'translate(-100%, -50%)',
-      };
-    }
-
-    const x = 50 + 26 * cos;
-    return {
-      left: `${x}%`,
-      top: `${y}%`,
-      transform: 'translate(-50%, -50%)',
-    };
-  }
-
-  const x = 50 + 38 * cos;
-  const y = 50 + 42 * sin;
+  const radiusX = portrait ? 28 : 38;
+  const radiusY = portrait ? 36 : 42;
+  const angle = (Math.PI / 2) + (index * 2 * Math.PI) / total;
+  const x = 50 + radiusX * Math.cos(angle);
+  const y = 50 + radiusY * Math.sin(angle);
   return {
     left: `${x}%`,
     top: `${y}%`,
@@ -368,7 +333,6 @@ function renderPlayers(game, el) {
   el.innerHTML = game.players.map((p, i) => {
     const viewIndex = getViewSeatIndex(game, i);
     const pos = getSeatPosition(viewIndex, game.players.length);
-    const sideClass = getSeatSideClass(viewIndex, game.players.length);
     const style = Object.entries(pos).map(([k, v]) => `${k}: ${v}`).join(';');
     const isActive = game.players[game.activeIndex]?.id === p.id &&
       game.phase !== 'idle' && game.phase !== 'showdown';
@@ -389,7 +353,7 @@ function renderPlayers(game, el) {
       ? p.hole.map(c => peekFolded ? peekCardHTML(c) : cardHTML(c, faceDown)).join('')
       : '<div class="card card-empty"></div><div class="card card-empty"></div>';
 
-    return `<div class="player-seat ${sideClass} ${isActive ? 'active' : ''} ${folded ? 'folded' : ''} ${peekFolded ? 'peek-cards' : ''}" style="${style}">
+    return `<div class="player-seat ${isActive ? 'active' : ''} ${folded ? 'folded' : ''} ${peekFolded ? 'peek-cards' : ''}" style="${style}">
       ${isDealer ? '<span class="dealer-button">D</span>' : ''}
       <div class="player-cards">${cards}</div>
       <div class="player-info">
