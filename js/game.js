@@ -893,6 +893,16 @@ export class PokerGame {
     return this.players.filter(p => p.inHand && !p.folded);
   }
 
+  /** Players who can still put chips in (not all-in). */
+  playersWhoCanBet() {
+    return this.playersInHand().filter(p => p.chips > 0);
+  }
+
+  /** Everyone left is all-in except at most one player — no further betting possible. */
+  isRunoutOnly() {
+    return this.playersInHand().length >= 2 && this.playersWhoCanBet().length <= 1;
+  }
+
   /** Still contesting the pot and able to bet, call, or raise. */
   canActInBetting(player) {
     return !!player && player.inHand && !player.folded && player.chips > 0;
@@ -1086,10 +1096,15 @@ export class PokerGame {
   }
 
   isBettingRoundComplete() {
-    const inHand = this.players.filter(p => p.inHand && !p.folded);
+    const inHand = this.playersInHand();
     if (inHand.length <= 1) return true;
 
     const canAct = inHand.filter(p => p.chips > 0);
+    const allMatched = inHand.every(p => p.bet === this.currentBet);
+
+    // One player left with chips vs all-in opponent(s) — run out, no checks needed
+    if (canAct.length <= 1 && allMatched) return true;
+
     if (canAct.every(p => p.bet === this.currentBet)) {
       const needsAction = canAct.filter(p => !this.actedThisRound.has(this.players.indexOf(p)));
       if (needsAction.length === 0) return true;
