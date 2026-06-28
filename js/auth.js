@@ -2,7 +2,32 @@ const AUTH_TOKEN_KEY = 'poker-auth-token';
 const AUTH_USER_KEY = 'poker-auth-user';
 
 let currentUser = null;
-let dbAvailable = null;
+let healthInfo = null;
+
+async function loadHealth() {
+  if (healthInfo !== null) return healthInfo;
+  try {
+    const res = await fetch('/api/health');
+    const data = await res.json().catch(() => ({}));
+    healthInfo = {
+      db: res.ok && data.db === true,
+      passwordReset: res.ok && data.passwordReset === true,
+    };
+  } catch {
+    healthInfo = { db: false, passwordReset: false };
+  }
+  return healthInfo;
+}
+
+export async function checkDbAvailable() {
+  const health = await loadHealth();
+  return health.db;
+}
+
+export async function isPasswordResetAvailable() {
+  const health = await loadHealth();
+  return health.passwordReset;
+}
 
 async function apiFetch(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -49,18 +74,6 @@ function clearSession() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
   } catch { /* ignore */ }
-}
-
-export async function checkDbAvailable() {
-  if (dbAvailable !== null) return dbAvailable;
-  try {
-    const res = await fetch('/api/health');
-    const data = await res.json().catch(() => ({}));
-    dbAvailable = res.ok && data.db === true;
-  } catch {
-    dbAvailable = false;
-  }
-  return dbAvailable;
 }
 
 export async function initAuth() {

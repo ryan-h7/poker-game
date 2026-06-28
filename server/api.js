@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { isDbEnabled } from './db.js';
+import { isResetEmailConfigured } from './mail.js';
 import {
   authMiddleware,
   registerUser,
@@ -15,7 +16,11 @@ import { query } from './db.js';
 const router = Router();
 
 router.get('/health', (_, res) => {
-  res.json({ ok: true, db: isDbEnabled() });
+  res.json({
+    ok: true,
+    db: isDbEnabled(),
+    passwordReset: isDbEnabled() && isResetEmailConfigured(),
+  });
 });
 
 function dbRequired(req, res, next) {

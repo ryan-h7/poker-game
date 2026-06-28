@@ -180,11 +180,14 @@
       <input type="email" id="auth-email" class="join-modal-input" autocomplete="email" inputmode="email">
       <label class="join-modal-label" for="auth-password">Password</label>
       <input type="password" id="auth-password" class="join-modal-input" autocomplete="current-password" minlength="8">
+      <p id="auth-password-hint" class="join-modal-hint auth-password-hint hidden">Choose a password you'll remember — password reset is not available on this site.</p>
       <p id="auth-forgot-wrap" class="auth-forgot-wrap">
-        <button type="button" id="btn-auth-forgot" class="btn-auth-link">Forgot password?</button>
+        <button type="button" id="btn-auth-forgot" class="btn-auth-link hidden">Forgot password?</button>
+        <span id="auth-reset-unavailable" class="join-modal-hint auth-reset-unavailable hidden">Password reset is not available. Sign in with the password you chose when you registered.</span>
       </p>
       <label class="join-modal-label auth-display-name-label hidden" for="auth-display-name">Display name</label>
       <input type="text" id="auth-display-name" class="join-modal-input auth-display-name-input hidden" maxlength="16" autocomplete="nickname">
+      <p id="auth-display-name-hint" class="join-modal-hint auth-display-name-hint hidden">Doesn't need to match a name you've used before — you can change it anytime after signing in.</p>
       <p id="auth-modal-error" class="join-modal-error hidden"></p>
       <div class="join-modal-actions">
         <button id="btn-auth-submit" class="btn btn-join-modal" type="button">Sign in</button>
@@ -196,7 +199,7 @@
   <div id="account-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
     <div class="join-modal-card auth-modal-card">
       <h2 id="account-modal-title">Your account</h2>
-      <p class="join-modal-sub">This name is shown at the table and in multiplayer lobbies.</p>
+      <p class="join-modal-sub">Shown at the table and in lobbies. Doesn't need to match what you used when you signed up — change it anytime.</p>
       <label class="join-modal-label" for="account-email">Email</label>
       <input type="email" id="account-email" class="join-modal-input" readonly>
       <label class="join-modal-label" for="account-display-name">Display name</label>

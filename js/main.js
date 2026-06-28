@@ -86,6 +86,7 @@ const elements = {
   authPassword: document.getElementById('auth-password'),
   authDisplayName: document.getElementById('auth-display-name'),
   authDisplayNameLabel: document.querySelector('.auth-display-name-label'),
+  authDisplayNameHint: document.getElementById('auth-display-name-hint'),
   authModalError: document.getElementById('auth-modal-error'),
   authTabLogin: document.getElementById('auth-tab-login'),
   authTabRegister: document.getElementById('auth-tab-register'),
@@ -93,6 +94,8 @@ const elements = {
   authCancelBtn: document.getElementById('btn-auth-cancel'),
   authForgotWrap: document.getElementById('auth-forgot-wrap'),
   authForgotBtn: document.getElementById('btn-auth-forgot'),
+  authResetUnavailable: document.getElementById('auth-reset-unavailable'),
+  authPasswordHint: document.getElementById('auth-password-hint'),
   accountModal: document.getElementById('account-modal'),
   accountEmail: document.getElementById('account-email'),
   accountDisplayName: document.getElementById('account-display-name'),
@@ -129,6 +132,7 @@ let pendingInviteRoomId = null;
 let soloSaveTimer;
 let authTab = 'login';
 let accountsEnabled = false;
+let passwordResetEnabled = false;
 let pendingResetToken = null;
 
 function setModalMessage(el, message, isSuccess = false) {
@@ -217,6 +221,16 @@ function setAuthModalError(message) {
   elements.authModalError.classList.toggle('hidden', !message);
 }
 
+function updateAuthResetUI() {
+  const isRegister = authTab === 'register';
+  const showForgot = !isRegister && passwordResetEnabled;
+  const showUnavailable = !isRegister && accountsEnabled && !passwordResetEnabled;
+  elements.authForgotBtn?.classList.toggle('hidden', !showForgot);
+  elements.authResetUnavailable?.classList.toggle('hidden', !showUnavailable);
+  elements.authForgotWrap?.classList.toggle('hidden', isRegister);
+  elements.authPasswordHint?.classList.toggle('hidden', !isRegister || !accountsEnabled);
+}
+
 function setAuthTab(tab) {
   authTab = tab;
   const isRegister = tab === 'register';
@@ -224,7 +238,7 @@ function setAuthTab(tab) {
   elements.authTabRegister?.classList.toggle('active', isRegister);
   elements.authDisplayName?.classList.toggle('hidden', !isRegister);
   elements.authDisplayNameLabel?.classList.toggle('hidden', !isRegister);
-  elements.authForgotWrap?.classList.toggle('hidden', isRegister);
+  elements.authDisplayNameHint?.classList.toggle('hidden', !isRegister);
   if (elements.authSubmitBtn) {
     elements.authSubmitBtn.textContent = isRegister ? 'Create account' : 'Sign in';
   }
@@ -234,6 +248,7 @@ function setAuthTab(tab) {
       : 'Sign in';
   }
   elements.authPassword?.setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
+  updateAuthResetUI();
   setAuthModalError('');
 }
 
@@ -414,11 +429,15 @@ async function handleAuthSubmit() {
     if (elements.joinModalName) elements.joinModalName.value = name;
     hideAuthModal();
     updateAccountUI();
-    if (!game.soloSessionActive && !game.onlineMode) {
-      const restored = await tryRestoreSoloSession();
-      if (restored) return;
+    if (!passwordResetEnabled && authTab === 'register') {
+      setMessage(elements.message, `Account created as ${name}. Remember your password — password reset is not available.`);
+    } else {
+      if (!game.soloSessionActive && !game.onlineMode) {
+        const restored = await tryRestoreSoloSession();
+        if (restored) return;
+      }
+      setMessage(elements.message, `Signed in as ${name}. Solo games will sync to your account.`);
     }
-    setMessage(elements.message, `Signed in as ${name}. Solo games will sync to your account.`);
     renderGame(game, elements);
   } finally {
     elements.authSubmitBtn.disabled = false;
@@ -1079,11 +1098,12 @@ async function tryRestoreOnlineSession() {
 const roomFromUrl = getRoomFromUrl();
 (async () => {
   accountsEnabled = await auth.checkDbAvailable();
+  passwordResetEnabled = await auth.isPasswordResetAvailable();
   if (accountsEnabled) await auth.initAuth();
   updateAccountUI();
 
   const resetToken = consumeResetTokenFromUrl();
-  if (resetToken && accountsEnabled) {
+  if (resetToken && accountsEnabled && passwordResetEnabled) {
     showResetPasswordModal(resetToken);
     return;
   }
