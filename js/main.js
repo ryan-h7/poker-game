@@ -432,7 +432,7 @@ async function handleAuthSubmit() {
     hideAuthModal();
     updateAccountUI();
     if (!passwordResetEnabled && authTab === 'register') {
-      setMessage(elements.message, `Account created as ${name}. Remember your password — password reset is not available.`);
+      setMessage(elements.message, `Welcome, ${name}! Save your password — reset isn't available if you forget it.`);
     } else {
       if (!game.soloSessionActive && !game.onlineMode) {
         const restored = await tryRestoreSoloSession();
