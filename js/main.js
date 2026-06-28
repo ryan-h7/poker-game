@@ -96,6 +96,7 @@ const elements = {
   authForgotBtn: document.getElementById('btn-auth-forgot'),
   authResetUnavailable: document.getElementById('auth-reset-unavailable'),
   authPasswordHint: document.getElementById('auth-password-hint'),
+  authSigninNameHint: document.getElementById('auth-signin-name-hint'),
   accountModal: document.getElementById('account-modal'),
   accountEmail: document.getElementById('account-email'),
   accountDisplayName: document.getElementById('account-display-name'),
@@ -229,6 +230,7 @@ function updateAuthResetUI() {
   elements.authResetUnavailable?.classList.toggle('hidden', !showUnavailable);
   elements.authForgotWrap?.classList.toggle('hidden', isRegister);
   elements.authPasswordHint?.classList.toggle('hidden', !isRegister || !accountsEnabled);
+  elements.authSigninNameHint?.classList.toggle('hidden', isRegister || !accountsEnabled);
 }
 
 function setAuthTab(tab) {
