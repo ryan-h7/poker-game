@@ -4,6 +4,14 @@ export const POT_BET_PRESETS = [0.25, 0.33, 0.5, 0.66, 0.75, 1, 1.25];
 
 let raiseTurnKey = '';
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export function raiseDisplayToChips(game, displayValue) {
   if (!game.showInBB) return Math.floor(displayValue);
   return game.clampRaiseTotal(Math.round(displayValue * game.bigBlind));
@@ -219,10 +227,12 @@ export function renderTableDetails(elements, info) {
   }
 
   if (lobbyPlayers && info.members) {
-    const canTransfer = info.isHost && info.members.length > 1;
+    const inLobby = info.status === 'lobby';
+    const canManage = info.isHost && info.members.length > 1;
     const maxRebuys = info.settings?.maxRebuys ?? 3;
     lobbyPlayers.innerHTML = info.members.map(m => {
-      const showMakeHost = canTransfer && m.id !== info.localSocketId && !m.isHost;
+      const showMakeHost = canManage && m.id !== info.localSocketId && !m.isHost;
+      const showKick = inLobby && canManage && m.id !== info.localSocketId && !m.isHost;
       let rebuyNote = '';
       if (maxRebuys !== 0) {
         const used = m.rebuyCount || 0;
@@ -234,6 +244,7 @@ export function renderTableDetails(elements, info) {
         <span class="lobby-player-name">${m.name}${m.isHost ? ' (host)' : ''}${rebuyNote}</span>
         <span class="lobby-player-actions">
           ${showMakeHost ? `<button type="button" class="btn-make-host" data-member-id="${m.id}">Make host</button>` : ''}
+          ${showKick ? `<button type="button" class="btn-kick-player" data-member-id="${m.id}" data-member-name="${escapeHtml(m.name)}">Kick</button>` : ''}
           <span class="lobby-seat">Seat ${m.seatIndex + 1}</span>
         </span>
       </li>`;

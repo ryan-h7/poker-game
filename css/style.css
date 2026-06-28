@@ -876,6 +876,27 @@ header h1 {
   cursor: not-allowed;
 }
 
+.btn-kick-player {
+  background: transparent;
+  color: #e57373;
+  border: 1px solid #e57373;
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-kick-player:hover:not(:disabled) {
+  background: rgba(229, 115, 115, 0.12);
+}
+
+.btn-kick-player:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .lobby-seat {
   color: var(--muted);
   font-size: 0.8rem;

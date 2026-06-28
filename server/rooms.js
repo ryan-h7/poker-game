@@ -117,6 +117,14 @@ class Room {
     return null;
   }
 
+  getMemberById(id) {
+    if (!id) return null;
+    for (const member of this.membersByToken.values()) {
+      if (member.socketId === id || member.token === id) return member;
+    }
+    return null;
+  }
+
   connectedMemberCount() {
     let n = 0;
     for (const member of this.membersByToken.values()) {
@@ -270,11 +278,15 @@ class Room {
     this.removeMemberByToken(member.token);
   }
 
-  removeMemberByToken(token, { timedOut = false } = {}) {
+  removeMemberByToken(token, { timedOut = false, kicked = false } = {}) {
     const member = this.membersByToken.get(token);
     if (!member) return;
 
     const seat = member.seatIndex;
+
+    if (kicked && member.socketId) {
+      this.notifyKicked(member.socketId);
+    }
 
     if (timedOut && this.isMidHand()) {
       this.clearMemberTimers(member);
@@ -302,6 +314,7 @@ class Room {
     }
 
     if (wasHost) this.transferHost(leftName);
+    else if (kicked) this.message = `${leftName} was removed from the table.`;
     else this.message = timedOut
       ? `${leftName} timed out and left the table.`
       : `${leftName} left the table.`;
@@ -348,6 +361,37 @@ class Room {
     this.message = `${fromName} made ${target.name} the host.`;
     this.syncTable();
     return { ok: true };
+  }
+
+  kickMember(requesterSocketId, targetMemberId) {
+    if (this.status !== 'lobby') {
+      return { ok: false, error: 'Can only remove players while waiting in the lobby.' };
+    }
+    const requester = this.getMemberBySocket(requesterSocketId);
+    if (!requester || requester.token !== this.hostToken) {
+      return { ok: false, error: 'Only the host can remove players.' };
+    }
+    const target = this.getMemberById(targetMemberId);
+    if (!target) return { ok: false, error: 'Player not in room.' };
+    if (target.token === requester.token) {
+      return { ok: false, error: 'You cannot remove yourself.' };
+    }
+    if (target.token === this.hostToken) {
+      return { ok: false, error: 'Cannot remove the host.' };
+    }
+
+    this.removeMemberByToken(target.token, { kicked: true });
+    return { ok: true };
+  }
+
+  notifyKicked(socketId) {
+    const sock = this.io.sockets.sockets.get(socketId);
+    if (!sock) return;
+    sock.emit('kicked', { reason: 'You were removed from the table by the host.' });
+    sock.leave(this.id);
+    delete sock.data.roomId;
+    delete sock.data.seatIndex;
+    delete sock.data.memberToken;
   }
 
   transferHost(leftName) {

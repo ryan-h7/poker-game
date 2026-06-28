@@ -88,6 +88,15 @@ io.on('connection', (socket) => {
     cb?.(room.assignHost(socket.id, targetSocketId));
   });
 
+  socket.on('kick-player', ({ targetMemberId }, cb) => {
+    const room = rooms.get(socket.data.roomId);
+    if (!room) {
+      cb?.({ ok: false, error: 'Not in a room.' });
+      return;
+    }
+    cb?.(room.kickMember(socket.id, targetMemberId));
+  });
+
   socket.on('rebuy', (_, cb) => {
     const room = rooms.get(socket.data.roomId);
     if (!room) {

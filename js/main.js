@@ -161,7 +161,9 @@ const network = new NetworkClient({
       settings: lobby.settings,
       status: lobby.status,
     });
-    if (game.roomStatus === 'lobby') {
+    if (lobby.message) {
+      setMessage(elements.message, lobby.message);
+    } else if (game.roomStatus === 'lobby') {
       setMessage(elements.message, lobby.isHost
         ? 'Share the invite link. Deal when everyone has joined.'
         : 'You\'re in the lobby — waiting for the host to deal.');
@@ -179,6 +181,24 @@ const network = new NetworkClient({
     game.lobbyPanelOpen = false;
     if (state.inviteLink) game.inviteLink = state.inviteLink;
     if (state.message) setMessage(elements.message, state.message);
+    renderGame(game, elements);
+  },
+  onKicked: (reason) => {
+    clearSoloState();
+    game.soloSessionActive = false;
+    inOnlineRoom = false;
+    game.onlineMode = false;
+    game.isHost = false;
+    game.lobbyPanelOpen = false;
+    game.roomStatus = 'lobby';
+    game.tableDetailsOpen = false;
+    game.inviteLink = '';
+    game.phase = 'idle';
+    game.resetPlayers();
+    hideMultiplayerPanel(elements);
+    hideJoinModal(elements);
+    clearRoomFromUrl();
+    setMessage(elements.message, reason);
     renderGame(game, elements);
   },
 });
@@ -435,8 +455,26 @@ elements.tableDetailsBtn?.addEventListener('click', () => toggleTableDetails());
 elements.closeTableDetailsBtn?.addEventListener('click', () => toggleTableDetails(false));
 
 elements.lobbyPlayers?.addEventListener('click', async (e) => {
+  if (!game.isHost) return;
+
+  const kickBtn = e.target.closest('.btn-kick-player');
+  if (kickBtn) {
+    const targetId = kickBtn.dataset.memberId;
+    const targetName = kickBtn.dataset.memberName || 'this player';
+    if (!targetId) return;
+    if (!confirm(`Remove ${targetName} from the table?`)) return;
+    kickBtn.disabled = true;
+    try {
+      const res = await network.kickPlayer(targetId);
+      if (!res.ok) setMessage(elements.message, res.error || 'Could not remove player.');
+    } finally {
+      kickBtn.disabled = false;
+    }
+    return;
+  }
+
   const btn = e.target.closest('.btn-make-host');
-  if (!btn || !game.isHost) return;
+  if (!btn) return;
   const targetId = btn.dataset.memberId;
   if (!targetId) return;
   btn.disabled = true;

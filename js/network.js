@@ -1,8 +1,9 @@
 export class NetworkClient {
-  constructor({ onLobby, onGameState, onError }) {
+  constructor({ onLobby, onGameState, onError, onKicked }) {
     this.onLobby = onLobby;
     this.onGameState = onGameState;
     this.onError = onError;
+    this.onKicked = onKicked;
     this.socket = null;
     this.roomId = null;
     this.inviteLink = null;
@@ -39,7 +40,19 @@ export class NetworkClient {
         this.seatIndex = state.localSeatIndex;
         this.onGameState?.(state);
       });
+      this.socket.on('kicked', (payload) => {
+        this.resetLocalSession();
+        this.onKicked?.(payload?.reason || 'Removed from the table.');
+      });
     });
+  }
+
+  resetLocalSession() {
+    this.roomId = null;
+    this.inviteLink = null;
+    this.memberToken = null;
+    this.isHost = false;
+    clearRoomSession();
   }
 
   emit(event, data) {
@@ -86,6 +99,10 @@ export class NetworkClient {
     return this.emit('transfer-host', { targetSocketId });
   }
 
+  kickPlayer(targetMemberId) {
+    return this.emit('kick-player', { targetMemberId });
+  }
+
   updateSettings(settings) {
     return this.emit('update-settings', settings);
   }
@@ -104,11 +121,7 @@ export class NetworkClient {
 
   leaveRoom() {
     if (this.socket) this.socket.emit('leave-room');
-    this.roomId = null;
-    this.inviteLink = null;
-    this.memberToken = null;
-    this.isHost = false;
-    clearRoomSession();
+    this.resetLocalSession();
   }
 
   disconnect() {
