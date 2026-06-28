@@ -4,6 +4,8 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { RoomManager } from './rooms.js';
+import { initDb, isDbEnabled } from './db.js';
+import apiRouter from './api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -15,6 +17,8 @@ const io = new Server(httpServer, {
   cors: { origin: '*' },
 });
 
+app.use(express.json({ limit: '512kb' }));
+app.use('/api', apiRouter);
 app.use(express.static(rootDir));
 
 const rooms = new RoomManager(io);
@@ -134,7 +138,23 @@ httpServer.on('error', (err) => {
   throw err;
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Poker server running at http://localhost:${PORT}`);
-  console.log('Create a room in the browser and share the invite link with friends.');
-});
+async function start() {
+  if (isDbEnabled()) {
+    try {
+      await initDb();
+      console.log('Database connected and schema ready.');
+    } catch (err) {
+      console.error('Database initialization failed:', err.message);
+      console.error('Account features disabled until DATABASE_URL is valid.');
+    }
+  } else {
+    console.log('DATABASE_URL not set — running without accounts (sessionStorage solo saves only).');
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log(`Poker server running at http://localhost:${PORT}`);
+    console.log('Create a room in the browser and share the invite link with friends.');
+  });
+}
+
+start();

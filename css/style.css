@@ -1279,3 +1279,125 @@ body.invite-join-pending .multiplayer-panel {
     max-width: 66px;
   }
 }
+
+.account-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.account-bar.hidden {
+  display: none;
+}
+
+.account-user {
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-account,
+.btn-account-outline {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn-account {
+  background: var(--gold);
+  color: var(--black);
+  border: none;
+  font-weight: 600;
+}
+
+.btn-account-outline {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid #30363d;
+}
+
+.btn-account:hover,
+.btn-account-outline:hover {
+  filter: brightness(1.08);
+}
+
+.display-mode:not(.hidden) {
+  margin-left: 0;
+}
+
+.auth-modal-card {
+  max-width: 380px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 0.45rem;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.auth-tab.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(212, 168, 83, 0.08);
+}
+
+.stats-panel {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #30363d;
+}
+
+.stats-panel.hidden {
+  display: none;
+}
+
+.stats-panel h2 {
+  font-size: 0.95rem;
+  margin-bottom: 0.65rem;
+  color: var(--gold);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.75rem;
+}
+
+.stats-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.stats-grid dt {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stats-grid dd {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#stat-profit.positive { color: #3fb950; }
+#stat-profit.negative { color: #f85149; }

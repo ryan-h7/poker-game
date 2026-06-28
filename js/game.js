@@ -36,9 +36,10 @@ function cloneCards(cards) {
 }
 
 export class PokerGame {
-  constructor(onUpdate, onMessage) {
+  constructor(onUpdate, onMessage, onHandComplete = null) {
     this.onUpdate = onUpdate;
     this.onMessage = onMessage;
+    this.onHandComplete = onHandComplete;
     this.playerCount = 4;
     this.bigBlind = 20;
     this.startingStack = DEFAULT_STARTING_STACK;
@@ -589,6 +590,47 @@ export class PokerGame {
     };
     this.currentHandEvents = null;
     this.handSnapshot = null;
+    if (!this.onlineMode && this.onHandComplete) {
+      const stats = this.buildSoloHandStats();
+      if (stats) this.onHandComplete(stats);
+    }
+  }
+
+  buildSoloHandStats() {
+    if (!this.lastHandReplay) return null;
+    const replay = this.lastHandReplay;
+    const seat = 0;
+    const chipsStart = replay.snapshot.players[seat]?.chips ?? 0;
+    const chipsEnd = replay.chipsAfterHand[seat] ?? 0;
+    const profit = chipsEnd - chipsStart;
+    const humanFolded = replay.endSnapshot?.players[seat]?.folded ?? false;
+    const sawShowdown = replay.endPhase === 'showdown' && !humanFolded;
+
+    let vpip = false;
+    let pfr = false;
+    let inPreflop = true;
+    for (const ev of replay.events) {
+      if (ev.type === 'phase') {
+        if (ev.phase !== 'preflop') inPreflop = false;
+        continue;
+      }
+      if (ev.type !== 'action' || ev.playerIndex !== seat || !inPreflop) continue;
+      if (ev.action === 'raise' || ev.action === 'allin') {
+        pfr = true;
+        vpip = true;
+      } else if (ev.action === 'call') {
+        vpip = true;
+      }
+    }
+
+    return {
+      profit,
+      won: profit > 0,
+      vpip,
+      pfr,
+      sawShowdown,
+      wonShowdown: sawShowdown && profit > 0,
+    };
   }
 
   captureEndSnapshot() {

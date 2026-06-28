@@ -13,6 +13,11 @@
     <header>
       <h1>Texas Hold'em</h1>
       <span id="phase" class="phase-badge">Ready</span>
+      <div id="account-bar" class="account-bar hidden">
+        <span id="account-user" class="account-user hidden"></span>
+        <button id="btn-account" class="btn btn-account" type="button">Sign in</button>
+        <button id="btn-logout" class="btn btn-account-outline hidden" type="button">Log out</button>
+      </div>
       <div id="display-mode" class="display-mode hidden" role="group" aria-label="Amount display">
         <button type="button" id="display-dollars" class="display-mode-btn active">$</button>
         <button type="button" id="display-bb" class="display-mode-btn">BB</button>
@@ -146,9 +151,43 @@
     </div>
 
     <aside class="sidebar">
+      <div id="stats-panel" class="stats-panel hidden">
+        <h2>Your stats</h2>
+        <dl class="stats-grid">
+          <div><dt>Hands</dt><dd id="stat-hands">0</dd></div>
+          <div><dt>Win rate</dt><dd id="stat-win-pct">0%</dd></div>
+          <div><dt>Net profit</dt><dd id="stat-profit">$0</dd></div>
+          <div><dt>VPIP</dt><dd id="stat-vpip">0%</dd></div>
+          <div><dt>PFR</dt><dd id="stat-pfr">0%</dd></div>
+          <div><dt>WTSD</dt><dd id="stat-wtsd">0%</dd></div>
+          <div><dt>W$SD</dt><dd id="stat-wsd">0%</dd></div>
+        </dl>
+      </div>
       <h2>Action Log</h2>
       <div id="log" class="log"></div>
     </aside>
+  </div>
+
+  <div id="auth-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+    <div class="join-modal-card auth-modal-card">
+      <h2 id="auth-modal-title">Sign in</h2>
+      <p class="join-modal-sub">Save your solo game and track stats across devices.</p>
+      <div class="auth-tabs" role="tablist">
+        <button type="button" id="auth-tab-login" class="auth-tab active" data-tab="login">Sign in</button>
+        <button type="button" id="auth-tab-register" class="auth-tab" data-tab="register">Create account</button>
+      </div>
+      <label class="join-modal-label" for="auth-email">Email</label>
+      <input type="email" id="auth-email" class="join-modal-input" autocomplete="email" inputmode="email">
+      <label class="join-modal-label" for="auth-password">Password</label>
+      <input type="password" id="auth-password" class="join-modal-input" autocomplete="current-password" minlength="8">
+      <label class="join-modal-label auth-display-name-label hidden" for="auth-display-name">Display name</label>
+      <input type="text" id="auth-display-name" class="join-modal-input auth-display-name-input hidden" maxlength="16" autocomplete="nickname">
+      <p id="auth-modal-error" class="join-modal-error hidden"></p>
+      <div class="join-modal-actions">
+        <button id="btn-auth-submit" class="btn btn-join-modal" type="button">Sign in</button>
+        <button id="btn-auth-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <div id="join-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="join-modal-title">

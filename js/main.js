@@ -6,6 +6,7 @@ import {
   showJoinModal, hideJoinModal, setJoinModalError, renderTableDetails,
 } from './ui.js';
 import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode, loadRoomSession, clearRoomSession, saveSoloState, loadSoloState, clearSoloState } from './network.js';
+import * as auth from './auth.js';
 import {
   copyOrShareLink, shareLink, primeLinkInput, canNativeShare, isMobileDevice,
 } from './clipboard.js';
@@ -76,6 +77,28 @@ const elements = {
   joinModalError: document.getElementById('join-modal-error'),
   joinModalSubmit: document.getElementById('btn-join-modal-submit'),
   joinModalCancel: document.getElementById('btn-join-modal-cancel'),
+  accountBar: document.getElementById('account-bar'),
+  accountUser: document.getElementById('account-user'),
+  accountBtn: document.getElementById('btn-account'),
+  logoutBtn: document.getElementById('btn-logout'),
+  authModal: document.getElementById('auth-modal'),
+  authEmail: document.getElementById('auth-email'),
+  authPassword: document.getElementById('auth-password'),
+  authDisplayName: document.getElementById('auth-display-name'),
+  authDisplayNameLabel: document.querySelector('.auth-display-name-label'),
+  authModalError: document.getElementById('auth-modal-error'),
+  authTabLogin: document.getElementById('auth-tab-login'),
+  authTabRegister: document.getElementById('auth-tab-register'),
+  authSubmitBtn: document.getElementById('btn-auth-submit'),
+  authCancelBtn: document.getElementById('btn-auth-cancel'),
+  statsPanel: document.getElementById('stats-panel'),
+  statHands: document.getElementById('stat-hands'),
+  statWinPct: document.getElementById('stat-win-pct'),
+  statProfit: document.getElementById('stat-profit'),
+  statVpip: document.getElementById('stat-vpip'),
+  statPfr: document.getElementById('stat-pfr'),
+  statWtsd: document.getElementById('stat-wtsd'),
+  statWsd: document.getElementById('stat-wsd'),
 };
 
 let autoSkipWhenFolded = false;
@@ -84,19 +107,148 @@ let showInBB = false;
 let inOnlineRoom = false;
 let pendingInviteRoomId = null;
 let soloSaveTimer;
+let authTab = 'login';
+let accountsEnabled = false;
+
+async function persistSoloState(state) {
+  saveSoloState(state);
+  if (auth.isLoggedIn()) {
+    await auth.saveSoloGame(state);
+  }
+}
 
 function scheduleSoloSave() {
   if (game.onlineMode || game.replaying) return;
   clearTimeout(soloSaveTimer);
-  soloSaveTimer = setTimeout(() => {
+  soloSaveTimer = setTimeout(async () => {
     if (game.onlineMode || game.replaying) return;
     if (!game.soloSessionActive) {
       clearSoloState();
+      if (auth.isLoggedIn()) auth.clearSoloGame();
       return;
     }
     const state = game.exportSoloState();
-    if (state) saveSoloState(state);
+    if (state) await persistSoloState(state);
   }, 250);
+}
+
+async function recordHandStats(handStats) {
+  if (!auth.isLoggedIn() || game.onlineMode) return;
+  await auth.recordHand(handStats);
+  await refreshStatsDisplay();
+}
+
+async function refreshStatsDisplay() {
+  if (!auth.isLoggedIn() || !accountsEnabled) {
+    elements.statsPanel?.classList.add('hidden');
+    return;
+  }
+  const raw = await auth.fetchStats();
+  const stats = auth.formatStats(raw);
+  if (!stats || !elements.statsPanel) return;
+  elements.statsPanel.classList.remove('hidden');
+  if (elements.statHands) elements.statHands.textContent = String(stats.hands);
+  if (elements.statWinPct) elements.statWinPct.textContent = `${stats.winPct}%`;
+  if (elements.statProfit) {
+    elements.statProfit.textContent = stats.profitLabel;
+    elements.statProfit.classList.toggle('positive', stats.profit > 0);
+    elements.statProfit.classList.toggle('negative', stats.profit < 0);
+  }
+  if (elements.statVpip) elements.statVpip.textContent = `${stats.vpipPct}%`;
+  if (elements.statPfr) elements.statPfr.textContent = `${stats.pfrPct}%`;
+  if (elements.statWtsd) elements.statWtsd.textContent = `${stats.wtsdPct}%`;
+  if (elements.statWsd) elements.statWsd.textContent = `${stats.wsdPct}%`;
+}
+
+function updateAccountUI() {
+  if (!accountsEnabled) {
+    elements.accountBar?.classList.add('hidden');
+    elements.statsPanel?.classList.add('hidden');
+    return;
+  }
+  elements.accountBar?.classList.remove('hidden');
+  const user = auth.getUser();
+  if (auth.isLoggedIn() && user) {
+    elements.accountUser?.classList.remove('hidden');
+    if (elements.accountUser) elements.accountUser.textContent = user.displayName;
+    elements.accountBtn?.classList.add('hidden');
+    elements.logoutBtn?.classList.remove('hidden');
+    refreshStatsDisplay();
+  } else {
+    elements.accountUser?.classList.add('hidden');
+    elements.accountBtn?.classList.remove('hidden');
+    elements.logoutBtn?.classList.add('hidden');
+    elements.statsPanel?.classList.add('hidden');
+  }
+}
+
+function setAuthModalError(message) {
+  if (!elements.authModalError) return;
+  elements.authModalError.textContent = message || '';
+  elements.authModalError.classList.toggle('hidden', !message);
+}
+
+function setAuthTab(tab) {
+  authTab = tab;
+  const isRegister = tab === 'register';
+  elements.authTabLogin?.classList.toggle('active', !isRegister);
+  elements.authTabRegister?.classList.toggle('active', isRegister);
+  elements.authDisplayName?.classList.toggle('hidden', !isRegister);
+  elements.authDisplayNameLabel?.classList.toggle('hidden', !isRegister);
+  if (elements.authSubmitBtn) {
+    elements.authSubmitBtn.textContent = isRegister ? 'Create account' : 'Sign in';
+  }
+  if (elements.authModal?.querySelector('#auth-modal-title')) {
+    elements.authModal.querySelector('#auth-modal-title').textContent = isRegister
+      ? 'Create account'
+      : 'Sign in';
+  }
+  elements.authPassword?.setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
+  setAuthModalError('');
+}
+
+function showAuthModal(tab = 'login') {
+  setAuthTab(tab);
+  elements.authModal?.classList.remove('hidden');
+  elements.authEmail?.focus();
+}
+
+function hideAuthModal() {
+  elements.authModal?.classList.add('hidden');
+  setAuthModalError('');
+}
+
+async function handleAuthSubmit() {
+  const email = elements.authEmail?.value?.trim();
+  const password = elements.authPassword?.value || '';
+  const displayName = elements.authDisplayName?.value?.trim();
+  if (!email || !password) {
+    setAuthModalError('Enter your email and password.');
+    return;
+  }
+  elements.authSubmitBtn.disabled = true;
+  try {
+    const result = authTab === 'register'
+      ? await auth.register({ email, password, displayName })
+      : await auth.login({ email, password });
+    if (!result.ok) {
+      setAuthModalError(result.error || 'Could not sign in.');
+      return;
+    }
+    const name = result.user.displayName;
+    if (elements.playerNameInput) elements.playerNameInput.value = name;
+    if (elements.joinModalName) elements.joinModalName.value = name;
+    hideAuthModal();
+    updateAccountUI();
+    if (!game.soloSessionActive && !game.onlineMode) {
+      const restored = await tryRestoreSoloSession();
+      if (restored) return;
+    }
+    setMessage(elements.message, `Signed in as ${name}. Solo games will sync to your account.`);
+    renderGame(game, elements);
+  } finally {
+    elements.authSubmitBtn.disabled = false;
+  }
 }
 
 function syncSoloUIFromGame() {
@@ -127,6 +279,7 @@ const game = new PokerGame(
     scheduleSoloSave();
   },
   (msg) => setMessage(elements.message, msg),
+  (handStats) => { recordHandStats(handStats); },
 );
 game.setShowBotHandsAtEnd(showBotHandsAtEnd);
 game.setShowInBB(showInBB);
@@ -332,6 +485,7 @@ elements.resetSoloBtn?.addEventListener('click', () => {
   if (!ok) return;
   game.resetSoloSession();
   clearSoloState();
+  if (auth.isLoggedIn()) auth.clearSoloGame();
   setMessage(elements.message, 'Game reset. Click "Deal Hand" to start fresh.');
   renderGame(game, elements);
 });
@@ -660,6 +814,23 @@ elements.potPresets.addEventListener('click', (e) => {
 elements.raiseBtn.addEventListener('click', () => submitRaise(false));
 elements.allInBtn.addEventListener('click', () => submitRaise(true));
 
+elements.accountBtn?.addEventListener('click', () => showAuthModal('login'));
+elements.logoutBtn?.addEventListener('click', () => {
+  auth.logout();
+  updateAccountUI();
+  setMessage(elements.message, 'Signed out.');
+});
+elements.authTabLogin?.addEventListener('click', () => setAuthTab('login'));
+elements.authTabRegister?.addEventListener('click', () => setAuthTab('register'));
+elements.authSubmitBtn?.addEventListener('click', () => handleAuthSubmit());
+elements.authCancelBtn?.addEventListener('click', () => hideAuthModal());
+elements.authPassword?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleAuthSubmit();
+});
+elements.authEmail?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') elements.authPassword?.focus();
+});
+
 renderGame(game, elements);
 
 let resizeTimer;
@@ -672,15 +843,21 @@ window.addEventListener('orientationchange', () => {
 });
 
 async function tryRestoreSoloSession() {
-  const state = loadSoloState();
+  let state = null;
+  if (auth.isLoggedIn()) {
+    state = await auth.loadSoloGame();
+  }
+  if (!state) state = loadSoloState();
   if (!state?.sessionActive) {
     if (state) clearSoloState();
     return false;
   }
   if (!game.restoreSoloState(state)) {
     clearSoloState();
+    if (auth.isLoggedIn()) auth.clearSoloGame();
     return false;
   }
+  saveSoloState(state);
   game.setShowBotHandsAtEnd(showBotHandsAtEnd);
   game.setShowInBB(showInBB);
   syncSoloUIFromGame();
@@ -708,12 +885,18 @@ async function tryRestoreOnlineSession() {
 
 const roomFromUrl = getRoomFromUrl();
 (async () => {
+  accountsEnabled = await auth.checkDbAvailable();
+  if (accountsEnabled) await auth.initAuth();
+  updateAccountUI();
+
   if (await tryRestoreOnlineSession()) return;
   if (await tryRestoreSoloSession()) return;
   if (roomFromUrl) {
     pendingInviteRoomId = roomFromUrl;
     showJoinModal(elements, roomFromUrl, { invited: true });
   } else {
-    setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
+    setMessage(elements.message, accountsEnabled
+      ? 'Click "Deal Hand" to play solo, or sign in to save your game across devices.'
+      : 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
   }
 })();
