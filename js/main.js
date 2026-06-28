@@ -6,6 +6,9 @@ import {
   showJoinModal, hideJoinModal, setJoinModalError, renderTableDetails,
 } from './ui.js';
 import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode, loadRoomSession, clearRoomSession, saveSoloState, loadSoloState, clearSoloState } from './network.js';
+import {
+  copyOrShareLink, shareLink, primeLinkInput, canNativeShare, isMobileDevice,
+} from './clipboard.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -58,6 +61,7 @@ const elements = {
   createRoomBtn: document.getElementById('btn-create-room'),
   joinRoomBtn: document.getElementById('btn-join-room'),
   copyLinkBtn: document.getElementById('btn-copy-link'),
+  shareLinkBtn: document.getElementById('btn-share-link'),
   inviteLinkInput: document.getElementById('invite-link'),
   lobbyRoomCode: document.getElementById('lobby-room-code'),
   lobbyPlayers: document.getElementById('lobby-players'),
@@ -221,17 +225,19 @@ function isOnline() {
 }
 
 async function copyInviteLink(link) {
-  if (!link) return false;
-  try {
-    await navigator.clipboard.writeText(link);
-    return true;
-  } catch {
-    if (elements.inviteLinkInput) {
-      elements.inviteLinkInput.value = link;
-      elements.inviteLinkInput.select();
-    }
-    return false;
+  if (!link) return 'manual';
+  primeLinkInput(elements.inviteLinkInput, link);
+  return copyOrShareLink(link);
+}
+
+function inviteLinkMessage(result, { created = false } = {}) {
+  const prefix = created ? 'Room created! ' : '';
+  if (result === 'copy') return `${prefix}Invite link copied to clipboard.`;
+  if (result === 'share') return `${prefix}Share the invite link from the sheet.`;
+  if (isMobileDevice()) {
+    return `${prefix}Tap the link below to select it, then Copy — or use Share.`;
   }
+  return `${prefix}Copy the invite link from Table details.`;
 }
 
 async function joinRoom(roomId, fromModal = false) {
@@ -352,10 +358,9 @@ elements.createRoomBtn.addEventListener('click', async () => {
     game.roomStatus = 'lobby';
     game.lobbyPanelOpen = false;
     game.localSeatIndex = 0;
-    const copied = await copyInviteLink(res.inviteLink || '');
-    setMessage(elements.message, copied
-      ? 'Room created! Invite link copied to clipboard.'
-      : 'Room created! Copy the invite link from Table details.');
+    game.tableDetailsOpen = true;
+    const copyResult = await copyInviteLink(res.inviteLink || '');
+    setMessage(elements.message, inviteLinkMessage(copyResult, { created: true }));
     renderGame(game, elements);
   } catch (err) {
     setMessage(elements.message, err.message);
@@ -465,13 +470,31 @@ function leaveOnlineRoom() {
 }
 
 elements.copyLinkBtn.addEventListener('click', async () => {
-  const link = elements.inviteLinkInput?.value;
+  const link = elements.inviteLinkInput?.value || game.inviteLink;
   if (!link) return;
-  const copied = await copyInviteLink(link);
-  setMessage(elements.message, copied
-    ? 'Invite link copied!'
-    : 'Copy the link manually (Ctrl+C).');
+  const result = await copyInviteLink(link);
+  setMessage(elements.message, inviteLinkMessage(result));
 });
+
+elements.shareLinkBtn?.addEventListener('click', async () => {
+  const link = elements.inviteLinkInput?.value || game.inviteLink;
+  if (!link) return;
+  if (await shareLink(link)) {
+    setMessage(elements.message, 'Share the invite link from the sheet.');
+  }
+});
+
+elements.inviteLinkInput?.addEventListener('click', () => {
+  primeLinkInput(elements.inviteLinkInput, elements.inviteLinkInput?.value);
+});
+
+elements.inviteLinkInput?.addEventListener('focus', () => {
+  primeLinkInput(elements.inviteLinkInput, elements.inviteLinkInput?.value);
+});
+
+if (elements.shareLinkBtn && canNativeShare()) {
+  elements.shareLinkBtn.classList.remove('hidden');
+}
 
 elements.addBotBtn?.addEventListener('click', async () => {
   if (isOnline() && game.isHost) {

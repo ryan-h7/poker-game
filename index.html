@@ -47,8 +47,9 @@
       <p id="lobby-table-settings" class="lobby-table-settings"></p>
       <div class="lobby-code">Room: <strong id="lobby-room-code">—</strong></div>
       <div class="invite-row">
-        <input type="text" id="invite-link" class="invite-link" readonly>
+        <input type="text" id="invite-link" class="invite-link" readonly inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button id="btn-copy-link" class="btn btn-copy" type="button">Copy Link</button>
+        <button id="btn-share-link" class="btn btn-share hidden" type="button">Share</button>
       </div>
       <ul id="lobby-players" class="lobby-players"></ul>
     </div>

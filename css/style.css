@@ -803,16 +803,20 @@ header h1 {
 
 .invite-link {
   flex: 1;
+  min-width: 0;
   background: var(--bg);
   border: 1px solid #30363d;
   border-radius: 8px;
   color: var(--text);
   padding: 0.45rem 0.6rem;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 16px;
+  -webkit-user-select: all;
+  user-select: all;
 }
 
-.btn-copy {
+.btn-copy,
+.btn-share {
   background: var(--surface);
   color: var(--gold);
   border: 1px solid var(--gold);
@@ -821,7 +825,10 @@ header h1 {
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
+  flex-shrink: 0;
 }
+
+.btn-share.hidden { display: none; }
 
 .lobby-players {
   list-style: none;
