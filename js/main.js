@@ -91,6 +91,26 @@ const elements = {
   authTabRegister: document.getElementById('auth-tab-register'),
   authSubmitBtn: document.getElementById('btn-auth-submit'),
   authCancelBtn: document.getElementById('btn-auth-cancel'),
+  authForgotWrap: document.getElementById('auth-forgot-wrap'),
+  authForgotBtn: document.getElementById('btn-auth-forgot'),
+  accountModal: document.getElementById('account-modal'),
+  accountEmail: document.getElementById('account-email'),
+  accountDisplayName: document.getElementById('account-display-name'),
+  accountModalError: document.getElementById('account-modal-error'),
+  accountSaveBtn: document.getElementById('btn-account-save'),
+  accountCancelBtn: document.getElementById('btn-account-cancel'),
+  forgotModal: document.getElementById('forgot-modal'),
+  forgotEmail: document.getElementById('forgot-email'),
+  forgotModalError: document.getElementById('forgot-modal-error'),
+  forgotModalSuccess: document.getElementById('forgot-modal-success'),
+  forgotSubmitBtn: document.getElementById('btn-forgot-submit'),
+  forgotCancelBtn: document.getElementById('btn-forgot-cancel'),
+  resetModal: document.getElementById('reset-modal'),
+  resetPassword: document.getElementById('reset-password'),
+  resetModalError: document.getElementById('reset-modal-error'),
+  resetModalSuccess: document.getElementById('reset-modal-success'),
+  resetSubmitBtn: document.getElementById('btn-reset-submit'),
+  resetCancelBtn: document.getElementById('btn-reset-cancel'),
   statsPanel: document.getElementById('stats-panel'),
   statHands: document.getElementById('stat-hands'),
   statWinPct: document.getElementById('stat-win-pct'),
@@ -109,6 +129,15 @@ let pendingInviteRoomId = null;
 let soloSaveTimer;
 let authTab = 'login';
 let accountsEnabled = false;
+let pendingResetToken = null;
+
+function setModalMessage(el, message, isSuccess = false) {
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('hidden', !message);
+  el.classList.toggle('join-modal-success', isSuccess);
+  el.classList.toggle('join-modal-error', !isSuccess);
+}
 
 async function persistSoloState(state) {
   saveSoloState(state);
@@ -195,6 +224,7 @@ function setAuthTab(tab) {
   elements.authTabRegister?.classList.toggle('active', isRegister);
   elements.authDisplayName?.classList.toggle('hidden', !isRegister);
   elements.authDisplayNameLabel?.classList.toggle('hidden', !isRegister);
+  elements.authForgotWrap?.classList.toggle('hidden', isRegister);
   if (elements.authSubmitBtn) {
     elements.authSubmitBtn.textContent = isRegister ? 'Create account' : 'Sign in';
   }
@@ -205,6 +235,150 @@ function setAuthTab(tab) {
   }
   elements.authPassword?.setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
   setAuthModalError('');
+}
+
+function showAccountModal() {
+  const user = auth.getUser();
+  if (!user) return;
+  if (elements.accountEmail) elements.accountEmail.value = user.email;
+  if (elements.accountDisplayName) {
+    elements.accountDisplayName.value = user.displayName || '';
+    elements.accountDisplayName.focus();
+    elements.accountDisplayName.select();
+  }
+  setModalMessage(elements.accountModalError, '');
+  elements.accountModal?.classList.remove('hidden');
+}
+
+function hideAccountModal() {
+  elements.accountModal?.classList.add('hidden');
+  setModalMessage(elements.accountModalError, '');
+}
+
+async function handleAccountSave() {
+  const displayName = elements.accountDisplayName?.value?.trim();
+  if (!displayName) {
+    setModalMessage(elements.accountModalError, 'Enter a display name.');
+    return;
+  }
+  elements.accountSaveBtn.disabled = true;
+  try {
+    const result = await auth.updateDisplayName(displayName);
+    if (!result.ok) {
+      setModalMessage(elements.accountModalError, result.error || 'Could not update name.');
+      return;
+    }
+    const name = result.user.displayName;
+    if (elements.playerNameInput) elements.playerNameInput.value = name;
+    if (elements.joinModalName) elements.joinModalName.value = name;
+    hideAccountModal();
+    updateAccountUI();
+    setMessage(elements.message, `Display name updated to ${name}.`);
+    renderGame(game, elements);
+  } finally {
+    elements.accountSaveBtn.disabled = false;
+  }
+}
+
+function showForgotModal(prefillEmail = '') {
+  hideAuthModal();
+  if (elements.forgotEmail) {
+    elements.forgotEmail.value = prefillEmail;
+    elements.forgotEmail.focus();
+  }
+  setModalMessage(elements.forgotModalError, '');
+  setModalMessage(elements.forgotModalSuccess, '', true);
+  elements.forgotSubmitBtn.disabled = false;
+  elements.forgotModal?.classList.remove('hidden');
+}
+
+function hideForgotModal() {
+  elements.forgotModal?.classList.add('hidden');
+  setModalMessage(elements.forgotModalError, '');
+  setModalMessage(elements.forgotModalSuccess, '', true);
+}
+
+async function handleForgotSubmit() {
+  const email = elements.forgotEmail?.value?.trim();
+  if (!email) {
+    setModalMessage(elements.forgotModalError, 'Enter your email address.');
+    return;
+  }
+  elements.forgotSubmitBtn.disabled = true;
+  setModalMessage(elements.forgotModalError, '');
+  setModalMessage(elements.forgotModalSuccess, '', true);
+  try {
+    const result = await auth.requestPasswordReset(email);
+    if (!result.ok) {
+      setModalMessage(elements.forgotModalError, result.error || 'Could not send reset email.');
+      elements.forgotSubmitBtn.disabled = false;
+      return;
+    }
+    setModalMessage(
+      elements.forgotModalSuccess,
+      result.message || 'If an account exists for that email, a reset link has been sent.',
+      true,
+    );
+  } catch {
+    setModalMessage(elements.forgotModalError, 'Could not send reset email. Try again later.');
+    elements.forgotSubmitBtn.disabled = false;
+  }
+}
+
+function showResetPasswordModal(token) {
+  pendingResetToken = token;
+  if (elements.resetPassword) elements.resetPassword.value = '';
+  setModalMessage(elements.resetModalError, '');
+  setModalMessage(elements.resetModalSuccess, '', true);
+  elements.resetSubmitBtn.disabled = false;
+  elements.resetModal?.classList.remove('hidden');
+  elements.resetPassword?.focus();
+}
+
+function hideResetPasswordModal() {
+  pendingResetToken = null;
+  elements.resetModal?.classList.add('hidden');
+  setModalMessage(elements.resetModalError, '');
+  setModalMessage(elements.resetModalSuccess, '', true);
+}
+
+async function handleResetSubmit() {
+  const password = elements.resetPassword?.value || '';
+  if (!pendingResetToken) {
+    setModalMessage(elements.resetModalError, 'This reset link is invalid.');
+    return;
+  }
+  if (password.length < 8) {
+    setModalMessage(elements.resetModalError, 'Password must be at least 8 characters.');
+    return;
+  }
+  elements.resetSubmitBtn.disabled = true;
+  setModalMessage(elements.resetModalError, '');
+  setModalMessage(elements.resetModalSuccess, '', true);
+  try {
+    const result = await auth.resetPassword(pendingResetToken, password);
+    if (!result.ok) {
+      setModalMessage(elements.resetModalError, result.error || 'Could not reset password.');
+      elements.resetSubmitBtn.disabled = false;
+      return;
+    }
+    hideResetPasswordModal();
+    showAuthModal('login');
+    setMessage(elements.message, result.message || 'Password updated. You can sign in now.');
+  } catch {
+    setModalMessage(elements.resetModalError, 'Could not reset password. Try again later.');
+    elements.resetSubmitBtn.disabled = false;
+  }
+}
+
+function consumeResetTokenFromUrl() {
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get('reset');
+  if (!token) return null;
+  url.searchParams.delete('reset');
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, '', next);
+  return token;
 }
 
 function showAuthModal(tab = 'login') {
@@ -815,6 +989,7 @@ elements.raiseBtn.addEventListener('click', () => submitRaise(false));
 elements.allInBtn.addEventListener('click', () => submitRaise(true));
 
 elements.accountBtn?.addEventListener('click', () => showAuthModal('login'));
+elements.accountUser?.addEventListener('click', () => showAccountModal());
 elements.logoutBtn?.addEventListener('click', () => {
   auth.logout();
   updateAccountUI();
@@ -824,6 +999,24 @@ elements.authTabLogin?.addEventListener('click', () => setAuthTab('login'));
 elements.authTabRegister?.addEventListener('click', () => setAuthTab('register'));
 elements.authSubmitBtn?.addEventListener('click', () => handleAuthSubmit());
 elements.authCancelBtn?.addEventListener('click', () => hideAuthModal());
+elements.authForgotBtn?.addEventListener('click', () => {
+  showForgotModal(elements.authEmail?.value?.trim() || '');
+});
+elements.accountSaveBtn?.addEventListener('click', () => handleAccountSave());
+elements.accountCancelBtn?.addEventListener('click', () => hideAccountModal());
+elements.accountDisplayName?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleAccountSave();
+});
+elements.forgotSubmitBtn?.addEventListener('click', () => handleForgotSubmit());
+elements.forgotCancelBtn?.addEventListener('click', () => hideForgotModal());
+elements.forgotEmail?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleForgotSubmit();
+});
+elements.resetSubmitBtn?.addEventListener('click', () => handleResetSubmit());
+elements.resetCancelBtn?.addEventListener('click', () => hideResetPasswordModal());
+elements.resetPassword?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleResetSubmit();
+});
 elements.authPassword?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleAuthSubmit();
 });
@@ -888,6 +1081,12 @@ const roomFromUrl = getRoomFromUrl();
   accountsEnabled = await auth.checkDbAvailable();
   if (accountsEnabled) await auth.initAuth();
   updateAccountUI();
+
+  const resetToken = consumeResetTokenFromUrl();
+  if (resetToken && accountsEnabled) {
+    showResetPasswordModal(resetToken);
+    return;
+  }
 
   if (await tryRestoreOnlineSession()) return;
   if (await tryRestoreSoloSession()) return;

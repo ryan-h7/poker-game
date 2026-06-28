@@ -5,6 +5,10 @@ import {
   registerUser,
   loginUser,
   getUserById,
+  updateUserDisplayName,
+  requestPasswordReset,
+  resetPasswordWithToken,
+  getAppBaseUrl,
 } from './auth.js';
 import { query } from './db.js';
 
@@ -55,6 +59,36 @@ router.get('/auth/me', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('me error', err);
     res.status(500).json({ ok: false, error: 'Could not load account.' });
+  }
+});
+
+router.patch('/auth/profile', authMiddleware, async (req, res) => {
+  try {
+    const result = await updateUserDisplayName(req.user.id, req.body?.displayName);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('profile update error', err);
+    res.status(500).json({ ok: false, error: 'Could not update profile.' });
+  }
+});
+
+router.post('/auth/forgot-password', async (req, res) => {
+  try {
+    const result = await requestPasswordReset(req.body?.email, getAppBaseUrl(req));
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('forgot password error', err);
+    res.status(500).json({ ok: false, error: 'Could not request password reset.' });
+  }
+});
+
+router.post('/auth/reset-password', async (req, res) => {
+  try {
+    const result = await resetPasswordWithToken(req.body?.token, req.body?.password);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('reset password error', err);
+    res.status(500).json({ ok: false, error: 'Could not reset password.' });
   }
 });
 

@@ -300,6 +300,39 @@ export function classifyHand(hole, community) {
   return { category: 'air', strength: madeStrength, draws, made };
 }
 
+/** How threatening the board is for medium-strength made hands (0–~0.2). */
+export function boardScareFactor(community) {
+  if (community.length < 3) return 0;
+
+  let scare = 0;
+  const texture = boardTexture(community);
+  if (texture === 'wet') scare += 0.06;
+  if (texture === 'paired') scare += 0.05;
+
+  const suitCounts = {};
+  for (const c of community) suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
+  const maxSuit = Math.max(...Object.values(suitCounts));
+  if (maxSuit >= 4) scare += 0.14;
+  else if (maxSuit >= 3) scare += 0.07;
+
+  const rankCounts = {};
+  for (const c of community) rankCounts[c.value] = (rankCounts[c.value] || 0) + 1;
+  if (Object.values(rankCounts).some(n => n >= 3)) scare += 0.11;
+  else if (Object.values(rankCounts).some(n => n >= 2) && community.length >= 4) scare += 0.05;
+
+  let values = [...new Set(community.map(c => c.value))];
+  if (values.includes(14)) values.push(1);
+  values = [...new Set(values)].sort((a, b) => a - b);
+  for (let i = 0; i <= values.length - 3; i++) {
+    if (values[i + 2] - values[i] <= 4) {
+      scare += community.length >= 4 ? 0.09 : 0.05;
+      break;
+    }
+  }
+
+  return Math.min(0.22, scare);
+}
+
 /** Rough flop texture for c-bet frequency. */
 export function boardTexture(community) {
   if (community.length < 3) return 'none';

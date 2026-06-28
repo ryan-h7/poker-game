@@ -119,6 +119,32 @@ export function logout() {
   clearSession();
 }
 
+export async function updateDisplayName(displayName) {
+  const { data } = await apiFetch('/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify({ displayName }),
+  });
+  if (!data.ok) return data;
+  saveSession(data.token, data.user);
+  return data;
+}
+
+export async function requestPasswordReset(email) {
+  const { data } = await apiFetch('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+  return data;
+}
+
+export async function resetPassword(token, password) {
+  const { data } = await apiFetch('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+  });
+  return data;
+}
+
 export async function loadSoloGame() {
   if (!isLoggedIn()) return null;
   try {

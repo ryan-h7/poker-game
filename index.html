@@ -14,7 +14,7 @@
       <h1>Texas Hold'em</h1>
       <span id="phase" class="phase-badge">Ready</span>
       <div id="account-bar" class="account-bar hidden">
-        <span id="account-user" class="account-user hidden"></span>
+        <button id="account-user" class="account-user hidden" type="button" title="Edit display name"></button>
         <button id="btn-account" class="btn btn-account" type="button">Sign in</button>
         <button id="btn-logout" class="btn btn-account-outline hidden" type="button">Log out</button>
       </div>
@@ -180,12 +180,61 @@
       <input type="email" id="auth-email" class="join-modal-input" autocomplete="email" inputmode="email">
       <label class="join-modal-label" for="auth-password">Password</label>
       <input type="password" id="auth-password" class="join-modal-input" autocomplete="current-password" minlength="8">
+      <p id="auth-forgot-wrap" class="auth-forgot-wrap">
+        <button type="button" id="btn-auth-forgot" class="btn-auth-link">Forgot password?</button>
+      </p>
       <label class="join-modal-label auth-display-name-label hidden" for="auth-display-name">Display name</label>
       <input type="text" id="auth-display-name" class="join-modal-input auth-display-name-input hidden" maxlength="16" autocomplete="nickname">
       <p id="auth-modal-error" class="join-modal-error hidden"></p>
       <div class="join-modal-actions">
         <button id="btn-auth-submit" class="btn btn-join-modal" type="button">Sign in</button>
         <button id="btn-auth-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="account-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+    <div class="join-modal-card auth-modal-card">
+      <h2 id="account-modal-title">Your account</h2>
+      <p class="join-modal-sub">This name is shown at the table and in multiplayer lobbies.</p>
+      <label class="join-modal-label" for="account-email">Email</label>
+      <input type="email" id="account-email" class="join-modal-input" readonly>
+      <label class="join-modal-label" for="account-display-name">Display name</label>
+      <input type="text" id="account-display-name" class="join-modal-input" maxlength="16" autocomplete="nickname">
+      <p id="account-modal-error" class="join-modal-error hidden"></p>
+      <div class="join-modal-actions">
+        <button id="btn-account-save" class="btn btn-join-modal" type="button">Save</button>
+        <button id="btn-account-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="forgot-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="forgot-modal-title">
+    <div class="join-modal-card auth-modal-card">
+      <h2 id="forgot-modal-title">Reset password</h2>
+      <p class="join-modal-sub">Enter your email and we will send a reset link if an account exists.</p>
+      <label class="join-modal-label" for="forgot-email">Email</label>
+      <input type="email" id="forgot-email" class="join-modal-input" autocomplete="email" inputmode="email">
+      <p id="forgot-modal-error" class="join-modal-error hidden"></p>
+      <p id="forgot-modal-success" class="join-modal-success hidden"></p>
+      <div class="join-modal-actions">
+        <button id="btn-forgot-submit" class="btn btn-join-modal" type="button">Send reset link</button>
+        <button id="btn-forgot-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="reset-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
+    <div class="join-modal-card auth-modal-card">
+      <h2 id="reset-modal-title">Choose a new password</h2>
+      <p class="join-modal-sub">Enter a new password for your account.</p>
+      <label class="join-modal-label" for="reset-password">New password</label>
+      <input type="password" id="reset-password" class="join-modal-input" autocomplete="new-password" minlength="8">
+      <p id="reset-modal-error" class="join-modal-error hidden"></p>
+      <p id="reset-modal-success" class="join-modal-success hidden"></p>
+      <div class="join-modal-actions">
+        <button id="btn-reset-submit" class="btn btn-join-modal" type="button">Update password</button>
+        <button id="btn-reset-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 import {
-  evaluateHand, compareHands, classifyHand, boardTexture, analyzeBlockers,
+  classifyHand, boardTexture, analyzeBlockers, boardScareFactor,
 } from './engine.js';
 import { getOpponentRead, getPrimaryVillain, getLimpedPotRead, getPreflopSizeMult } from './opponent.js';
 
@@ -219,11 +219,32 @@ export function getBarrelContext(game, playerIndex) {
   };
 }
 
+/** Highest trap risk among active opponents (for barrel/bluff discipline). */
+function getOpponentTrapLine(game, heroIndex) {
+  let best = { trapRisk: 0, slowplay: false };
+  for (let i = 0; i < game.players.length; i++) {
+    if (i === heroIndex) continue;
+    const p = game.players[i];
+    if (!p.inHand || p.folded) continue;
+    const ls = scoreVillainLine(game, i);
+    if (ls.trapRisk > best.trapRisk) best = ls;
+  }
+  return best;
+}
+
+function trapCautionMult(trapLine) {
+  if (!trapLine.slowplay) return 1;
+  return Math.max(0.4, 1 - trapLine.trapRisk * 0.65);
+}
+
 function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
   const toCall = game.currentBet - player.bet;
   if (toCall > 0) return null;
 
   const mw = potCtx.multiwayScalar;
+  const heroIndex = game.players.indexOf(player);
+  const trapLine = getOpponentTrapLine(game, heroIndex);
+  const trapMult = trapCautionMult(trapLine);
 
   const betForStreet = (street) => {
     const frac = street === 'flop'
@@ -273,14 +294,14 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
   // ── Turn barrel (fired flop c-bet and got called) ──
   if (barrelCtx.isTurnBarrelSpot) {
     const dryBonus = ['dry-high', 'dry-low', 'neutral'].includes(barrelCtx.texture) ? 1.2 : 0.75;
-    const barrelFreq = (0.38 + aggression * 0.28) * dryBonus * mw;
+    const barrelFreq = (0.38 + aggression * 0.28) * dryBonus * mw * trapMult;
 
     if (hand.category === 'premium') {
       const amt = betForStreet('turn');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 2 });
     }
     if (hand.category === 'marginal') {
-      let barrelChance = (0.55 + aggression * 0.2) * mw;
+      let barrelChance = (0.55 + aggression * 0.2) * mw * trapMult;
       if (isStrongPair(hand)) barrelChance *= 1.2;
       else if (isWeakPair(hand)) barrelChance *= 0.35;
       else if (pairTier(hand) === 'middle') barrelChance *= 0.75;
@@ -302,7 +323,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
 
   // ── River triple barrel (polarized) ──
   if (barrelCtx.isRiverBarrelSpot) {
-    const tripleFreq = (0.14 + aggression * 0.18) * mw;
+    const tripleFreq = (0.14 + aggression * 0.18) * mw * trapMult;
 
     if (hand.category === 'premium'
         || (hand.category === 'marginal' && hand.strength > 0.28 && isStrongPair(hand))) {
@@ -343,6 +364,10 @@ function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCt
     return { action: 'call' };
   }
   if (hand.category === 'marginal') {
+    if (trapRespect && !isStrongPair(hand)) {
+      if (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet') return { action: 'fold' };
+      if (Math.random() < lineScore.trapRisk * 0.55) return { action: 'fold' };
+    }
     const tier = pairTier(hand);
     const floatBonus = oppRead.callThresholdBonus;
     if (isCbet && facing.sizeCategory === 'small' && !potCtx.isMultiway) {
@@ -389,17 +414,25 @@ function decideVsProbe(player, game, hand, aggression, facing, potCtx, oppRead) 
 
   const potOdds = toCall / (game.pot + toCall);
 
+  const lineScore = bettor >= 0 ? scoreVillainLine(game, bettor) : { trapRisk: 0, slowplay: false };
+  const trapRespect = lineScore.slowplay || lineScore.trapRisk >= 0.32;
+
   if (hand.category === 'premium') return { action: 'call' };
 
   if (hand.category === 'draw') {
     const need = 0.3 + hand.draws.drawStrength * 0.22
       - (oppRead.isStabBluffer ? 0.06 : 0);
+    if (trapRespect && facing.sizeCategory === 'large') return { action: 'fold' };
     if (potOdds < need * oppRead.floatMult) return { action: 'call' };
     if (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet') return { action: 'fold' };
     return { action: 'call' };
   }
 
   if (hand.category === 'marginal') {
+    if (trapRespect && !isStrongPair(hand)) {
+      if (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet') return { action: 'fold' };
+      if (Math.random() < lineScore.trapRisk * 0.5) return { action: 'fold' };
+    }
     if (oppRead.isStabHappy && facing.sizeCategory === 'small') {
       const threshold = 0.3 + oppRead.callThresholdBonus;
       if (potOdds < threshold * oppRead.floatMult) return { action: 'call' };
@@ -606,6 +639,214 @@ function decidePreflopIso(
   return null;
 }
 
+const SIZE_STRENGTH_BOOST = {
+  small: 0.06,
+  medium: 0.11,
+  large: 0.18,
+  overbet: 0.28,
+};
+
+const POSTFLOP_STREETS = ['flop', 'turn', 'river'];
+
+function readStreetEntry(playerStreets, street) {
+  const v = playerStreets?.[street];
+  if (!v) return null;
+  if (typeof v === 'string') return { action: v, checkedFirst: false };
+  return v;
+}
+
+function isCheckCall(entry) {
+  return entry?.action === 'call' && entry.checkedFirst;
+}
+
+function scoreTrapPotential(game, villainIndex, { flop, turn, river }) {
+  let trapRisk = 0;
+  const texture = boardTexture(game.community);
+  const scare = boardScareFactor(game.community);
+  const pfa = game.preflopAggressor === villainIndex;
+
+  if (isCheckCall(flop)) {
+    trapRisk += 0.14;
+    if (pfa) trapRisk += 0.1;
+    if (texture === 'wet' || texture === 'paired') trapRisk += 0.1;
+    if (scare >= 0.1) trapRisk += 0.06;
+  }
+  if (isCheckCall(turn)) {
+    trapRisk += 0.16;
+    if (isCheckCall(flop)) trapRisk += 0.14;
+  }
+  if (isCheckCall(river)) trapRisk += 0.12;
+
+  if (flop?.action === 'check' && turn?.action === 'call' && !turn.checkedFirst) {
+    trapRisk += 0.07;
+  }
+  if (flop?.action === 'check' && turn?.action === 'check' && river?.action === 'raise') {
+    trapRisk += 0.18;
+  }
+  if ((isCheckCall(flop) || isCheckCall(turn)) && (river?.action === 'raise' || turn?.action === 'raise')) {
+    trapRisk += 0.15;
+  }
+
+  const calls = [flop, turn, river].filter(e => e?.action === 'call').length;
+  const bets = [flop, turn, river].filter(e => e?.action === 'bet' || e?.action === 'raise').length;
+  if (calls >= 2 && bets === 0 && (texture === 'wet' || texture === 'paired' || scare >= 0.12)) {
+    trapRisk += 0.11;
+  }
+
+  return Math.min(1, trapRisk);
+}
+
+/**
+ * Narrow villain range from their line across prior + current streets.
+ */
+export function scoreVillainLine(game, villainIndex) {
+  const empty = { strengthAdj: 0, capped: false, polarized: false, trapRisk: 0, slowplay: false };
+  if (villainIndex < 0 || game.community.length < 3) return empty;
+
+  const ps = game.bettingLine?.playerStreets?.[villainIndex] || {};
+  const currentIdx = POSTFLOP_STREETS.indexOf(game.phase);
+  if (currentIdx < 0) return empty;
+
+  const flop = readStreetEntry(ps, 'flop');
+  const turn = readStreetEntry(ps, 'turn');
+  const river = readStreetEntry(ps, 'river');
+  const line = POSTFLOP_STREETS.slice(0, currentIdx + 1)
+    .map(s => readStreetEntry(ps, s))
+    .filter(Boolean);
+
+  let strengthAdj = 0;
+  let capped = false;
+  let polarized = false;
+
+  const trapRisk = scoreTrapPotential(game, villainIndex, { flop, turn, river });
+  const slowplay = trapRisk >= 0.28;
+
+  const bets = line.filter(e => e.action === 'bet' || e.action === 'raise').length;
+  const calls = line.filter(e => e.action === 'call').length;
+  const checks = line.filter(e => e.action === 'check').length;
+  const checkCalls = line.filter(isCheckCall).length;
+
+  if (calls >= 1) strengthAdj += 0.03 + (calls - 1) * 0.055;
+  if (calls >= 2) strengthAdj += 0.04;
+
+  if (bets >= 2) {
+    strengthAdj += 0.07 + (bets - 2) * 0.045;
+    polarized = true;
+  }
+
+  if (checks >= 1 && bets === 0 && !slowplay) {
+    strengthAdj -= 0.04 + checks * 0.035;
+    capped = true;
+  }
+
+  if (slowplay) {
+    strengthAdj += trapRisk * 0.14;
+    capped = false;
+  }
+
+  if (flop?.action === 'call' && turn?.action === 'call' && currentIdx >= 1) {
+    strengthAdj += 0.08;
+  }
+  if (flop?.action === 'call' && turn?.action === 'bet' && currentIdx >= 1) {
+    strengthAdj += 0.07;
+  }
+  if (flop?.action === 'bet' && turn?.action === 'call' && currentIdx >= 1) {
+    strengthAdj += 0.05;
+  }
+  if (flop?.action === 'check' && turn?.action === 'bet' && currentIdx >= 1) {
+    strengthAdj += 0.04;
+  }
+  if (flop?.action === 'check' && turn?.action === 'check' && currentIdx >= 1 && !slowplay) {
+    strengthAdj -= 0.08;
+    capped = true;
+  }
+  if (flop?.action === 'bet' && turn?.action === 'bet' && currentIdx >= 1) {
+    strengthAdj += 0.05;
+    polarized = true;
+  }
+  if (calls >= 2 && river?.action === 'bet' && currentIdx >= 2) {
+    strengthAdj += 0.09;
+    polarized = true;
+  }
+  if (checkCalls >= 1) {
+    strengthAdj += 0.03 + (checkCalls - 1) * 0.05;
+  }
+  if (flop?.action === 'check' && turn?.action === 'call' && currentIdx >= 1 && !slowplay) {
+    strengthAdj += 0.02;
+    capped = true;
+  }
+  if (line[line.length - 1]?.action === 'raise') {
+    strengthAdj += 0.06;
+    polarized = true;
+  }
+
+  return {
+    strengthAdj: Math.max(-0.18, Math.min(0.22, strengthAdj)),
+    capped,
+    polarized,
+    trapRisk,
+    slowplay,
+  };
+}
+
+/**
+ * Estimate villain range strength (0–1) from board + betting line only — no hole cards.
+ */
+export function estimateVillainRangeStrength(game, playerIndex, { facing, barrelCtx, oppRead, potCtx }) {
+  if (game.community.length < 3) return 0.45;
+
+  const line = game.bettingLine;
+  const villainIndex = getPrimaryVillain(game, playerIndex);
+  const streetBettor = line.streets[game.phase]?.bettor;
+  const villainLed = streetBettor !== undefined && streetBettor !== playerIndex
+    && (villainIndex < 0 || streetBettor === villainIndex);
+
+  const lineTarget = villainIndex >= 0 ? villainIndex : streetBettor;
+  const lineScore = lineTarget >= 0
+    ? scoreVillainLine(game, lineTarget)
+    : { strengthAdj: 0, capped: false, polarized: false, trapRisk: 0, slowplay: false };
+
+  let strength = 0.26 + boardScareFactor(game.community) + lineScore.strengthAdj;
+
+  if (lineScore.slowplay) {
+    strength += lineScore.trapRisk * 0.16;
+    if (facing.facing && (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet')) {
+      strength += 0.06;
+    }
+  }
+
+  if (facing.facing) {
+    strength += SIZE_STRENGTH_BOOST[facing.sizeCategory] ?? 0.1;
+    if (line.barrelCount >= 2) strength += 0.04;
+    if (line.barrelCount >= 3) strength += 0.03;
+    if (villainLed && barrelCtx.texture === 'wet') strength += 0.04;
+    if (lineScore.polarized && (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet')) {
+      strength += 0.05;
+    }
+    if (lineScore.slowplay && villainLed) strength += lineScore.trapRisk * 0.1;
+  } else if (villainLed) {
+    strength += 0.08;
+  }
+
+  if (lineScore.capped && !lineScore.slowplay) {
+    strength = Math.min(strength, 0.46);
+  } else if (lineScore.slowplay) {
+    strength = Math.max(strength, 0.36 + lineScore.trapRisk * 0.22);
+  }
+
+  if (potCtx?.isMultiway && facing.facing) strength += 0.05;
+
+  if (oppRead) {
+    if (oppRead.tightness > 0.58 && facing.facing) strength += 0.06;
+    if (oppRead.isStabBluffer && villainLed) strength -= 0.09;
+    if (oppRead.isStabHappy && facing.facing && facing.sizeCategory === 'small') strength -= 0.05;
+    if (lineScore.capped && oppRead.isStabHappy && villainLed) strength -= 0.04;
+    if (lineScore.slowplay && oppRead.tightness > 0.52) strength += 0.05;
+  }
+
+  return Math.max(0.14, Math.min(0.88, strength));
+}
+
 export function decideAction(player, game) {
   const toCall = game.currentBet - player.bet;
   const canCheck = toCall === 0;
@@ -618,6 +859,9 @@ export function decideAction(player, game) {
   const pos = POSITION[posTier];
   const barrelCtx = getBarrelContext(game, playerIndex);
   const potCtx = getPotContext(game, playerIndex);
+  const villainIndex = getPrimaryVillain(game, playerIndex);
+  const oppRead = getOpponentRead(game, villainIndex);
+  const limpRead = isPreflop ? getLimpedPotRead(game, playerIndex) : null;
 
   const hand = classifyHand(player.hole, game.community);
   const blockers = isPreflop ? { score: 0, details: [] } : analyzeBlockers(player.hole, game.community);
@@ -631,16 +875,16 @@ export function decideAction(player, game) {
   }
 
   if (!isPreflop) {
-    const maxOpp = estimateOpponentStrength(game, player);
-    const score = hand.made || evaluateHand([...player.hole, ...game.community]);
-    strength = strength * 0.65 + (compareHands(score, maxOpp) > 0 ? 0.25 : 0);
+    const villainRange = estimateVillainRangeStrength(game, playerIndex, {
+      facing, barrelCtx, oppRead, potCtx,
+    });
+    const ahead = hand.strength > villainRange + 0.1;
+    const behind = hand.strength < villainRange - 0.1;
+    strength = strength * 0.65 + (ahead ? 0.25 : behind ? -0.1 : 0);
     if (hand.category === 'draw') strength += hand.draws.drawStrength * 0.15;
   }
 
   const aggression = player.personality?.aggression ?? 0.5;
-  const villainIndex = getPrimaryVillain(game, playerIndex);
-  const oppRead = getOpponentRead(game, villainIndex);
-  const limpRead = isPreflop ? getLimpedPotRead(game, playerIndex) : null;
 
   if (!isPreflop) {
     if (!canCheck) {
@@ -848,18 +1092,6 @@ export function decideAction(player, game) {
   if (canCheck) return { action: 'check' };
   if (toCall <= player.chips * 0.2) return { action: 'call' };
   return { action: 'fold' };
-}
-
-function estimateOpponentStrength(game, self) {
-  let best = { rank: 0, kickers: [0] };
-  for (const p of game.players) {
-    if (p === self || !p.inHand || p.folded) continue;
-    if (game.community.length >= 3) {
-      const score = evaluateHand([...p.hole, ...game.community]);
-      if (compareHands(score, best) > 0) best = score;
-    }
-  }
-  return best;
 }
 
 export const AI_PERSONALITIES = [

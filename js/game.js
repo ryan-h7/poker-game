@@ -20,6 +20,7 @@ export const BIG_BLIND_OPTIONS = [5, 10, 20, 25, 50, 100];
 function createBettingLine() {
   return {
     streets: {},
+    playerStreets: {},
     barrelCount: 0,
     flopCbetCalled: false,
     turnBarrelCalled: false,
@@ -1044,6 +1045,7 @@ export class PokerGame {
       case 'check':
         if (toCall > 0) return false;
         this.handHistory.push(`${player.name} checks`);
+        this.noteStreetAction(playerIndex, 'check');
         return succeed();
 
       case 'call': {
@@ -1053,6 +1055,7 @@ export class PokerGame {
         this.pot += pay;
         this.handHistory.push(`${player.name} calls ${this.formatAmount(pay)}`);
         this.noteCallVsAggressor(player);
+        this.noteStreetAction(playerIndex, 'call');
         return succeed();
       }
 
@@ -1072,12 +1075,14 @@ export class PokerGame {
         this.actedThisRound = new Set([this.lastRaiser]);
         if (this.phase === 'preflop') this.preflopAggressor = this.lastRaiser;
         if (isFirstBetStreet) this.noteStreetBet(this.lastRaiser);
+        this.noteStreetAction(playerIndex, isFirstBetStreet ? 'bet' : 'raise');
         this.handHistory.push(`${player.name} raises to ${this.formatAmount(target)}`);
         return succeed();
       }
 
       case 'allin': {
         const isFirstBetStreet = this.currentBet === 0 && this.community.length > 0;
+        const prevCurrentBet = this.currentBet;
         const total = player.chips;
         const newBet = player.bet + total;
         if (newBet > this.currentBet) {
@@ -1087,6 +1092,10 @@ export class PokerGame {
           this.actedThisRound = new Set([this.lastRaiser]);
           if (this.phase === 'preflop') this.preflopAggressor = this.lastRaiser;
           if (isFirstBetStreet) this.noteStreetBet(this.lastRaiser);
+          const facingBet = prevCurrentBet > player.bet;
+          this.noteStreetAction(playerIndex, isFirstBetStreet ? 'bet' : (facingBet ? 'raise' : 'bet'));
+        } else {
+          this.noteStreetAction(playerIndex, 'call');
         }
         player.bet = newBet;
         this.pot += total;
@@ -1352,6 +1361,30 @@ export class PokerGame {
     this.bettingLine.streets[street] = { bettor: playerIndex };
     if (playerIndex === this.preflopAggressor) {
       this.bettingLine.barrelCount += 1;
+    }
+  }
+
+  noteStreetAction(playerIndex, streetAction) {
+    if (!['flop', 'turn', 'river'].includes(this.phase)) return;
+    if (!this.bettingLine.playerStreets[playerIndex]) {
+      this.bettingLine.playerStreets[playerIndex] = {};
+    }
+    const street = this.phase;
+    const prev = this.bettingLine.playerStreets[playerIndex][street];
+    const prevAction = typeof prev === 'string' ? prev : prev?.action;
+    const prevChecked = typeof prev === 'object' && prev?.checkedFirst;
+    const checkedFirst = streetAction === 'check'
+      || (streetAction === 'call' && (prevAction === 'check' || prevChecked));
+
+    const rank = { fold: 0, check: 1, call: 2, bet: 3, raise: 4 };
+    const prevRank = rank[prevAction] ?? 0;
+    const newRank = rank[streetAction] ?? 0;
+
+    if (!prevAction || newRank >= prevRank) {
+      this.bettingLine.playerStreets[playerIndex][street] = {
+        action: streetAction,
+        checkedFirst: streetAction === 'check' ? true : !!checkedFirst,
+      };
     }
   }
 
