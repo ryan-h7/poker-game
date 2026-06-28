@@ -95,7 +95,12 @@ export class PokerGame {
   }
 
   getHumanCount() {
-    if (this.onlineMode) return this.roomMembers.size;
+    if (this.onlineMode) {
+      const members = [...this.roomMembers.values()];
+      const connected = members.filter(m => m.connected !== false).length;
+      if (connected === 1 && members.length > connected) return connected;
+      return this.roomMembers.size;
+    }
     return 1;
   }
 

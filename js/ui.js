@@ -216,9 +216,15 @@ export function renderTableDetails(elements, info) {
   if (inviteLinkInput && info.inviteLink) inviteLinkInput.value = info.inviteLink;
   if (lobbyHint) {
     if (info.status === 'lobby') {
-      lobbyHint.textContent = info.isHost
-        ? 'Share the link below. Deal when at least 2 players have joined.'
-        : 'Waiting for the host to deal…';
+      const humans = info.members?.length ?? 0;
+      const bots = Math.max(0, (info.settings?.playerCount ?? 0) - humans);
+      if (info.isHost) {
+        lobbyHint.textContent = humans < 2
+          ? `Share the link below. Deal when ready — ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
+          : 'Share the link below. Deal when everyone has joined.';
+      } else {
+        lobbyHint.textContent = 'Waiting for the host to deal…';
+      }
     } else if (info.isHost) {
       lobbyHint.textContent = 'You are the host — deal the next hand when ready.';
     } else {
@@ -263,7 +269,8 @@ export function renderTableDetails(elements, info) {
   }
 
   if (lobbyTableSettings && info.settings && info.members) {
-    const humans = info.members.length;
+    const connected = info.members.filter(m => m.connected !== false).length;
+    const humans = connected || info.members.length;
     const bots = Math.max(0, info.settings.playerCount - humans);
     const stack = info.settings.startingStack ?? 1000;
     const rebuyText = formatRebuyLimit(info.settings.maxRebuys ?? 3);

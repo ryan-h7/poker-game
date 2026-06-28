@@ -164,8 +164,11 @@ const network = new NetworkClient({
     if (lobby.message) {
       setMessage(elements.message, lobby.message);
     } else if (game.roomStatus === 'lobby') {
+      const humans = lobby.members?.length ?? 0;
       setMessage(elements.message, lobby.isHost
-        ? 'Share the invite link. Deal when everyone has joined.'
+        ? (humans < 2
+          ? 'Share the invite link. Deal when ready — bots fill empty seats.'
+          : 'Share the invite link. Deal when everyone has joined.')
         : 'You\'re in the lobby — waiting for the host to deal.');
     }
     renderGame(game, elements);

@@ -33,6 +33,7 @@ export class RoomManager {
   removeIfEmpty(roomId) {
     const room = this.get(roomId);
     if (room && room.membersByToken.size === 0) {
+      room.destroy();
       this.rooms.delete(roomId);
     }
   }
@@ -51,6 +52,65 @@ class Room {
     this.message = 'Waiting for players…';
     this.disconnectGraceMs = 90_000;
     this.disconnectTurnGraceMs = 45_000;
+    this.soloIdleTimer = null;
+    this.soloIdleMs = 4 * 60 * 60 * 1000;
+  }
+
+  destroy() {
+    this.clearSoloIdleTimer();
+    for (const member of this.membersByToken.values()) {
+      this.clearMemberTimers(member);
+    }
+    if (this.game) {
+      this.game.clearAiTimer();
+      this.game = null;
+    }
+    this.membersByToken.clear();
+    this.hostToken = null;
+  }
+
+  clearSoloIdleTimer() {
+    if (!this.soloIdleTimer) return;
+    clearTimeout(this.soloIdleTimer);
+    this.soloIdleTimer = null;
+  }
+
+  /** Members that occupy seats in the current hand (solo fill when alone). */
+  playMembers() {
+    const all = this.allMembers();
+    const connected = all.filter(m => m.socketId);
+    if (connected.length === 1 && all.length > 1) return connected;
+    return all;
+  }
+
+  isSoloContinuation() {
+    return this.connectedMemberCount() === 1
+      && this.membersByToken.size >= 1;
+  }
+
+  refreshSoloIdleCleanup() {
+    this.clearSoloIdleTimer();
+    if (this.connectedMemberCount() !== 1 || this.isMidHand()) return;
+    this.soloIdleTimer = setTimeout(() => {
+      this.soloIdleTimer = null;
+      if (this.connectedMemberCount() !== 1 || this.isMidHand()) return;
+      const member = this.allMembers().find(m => m.socketId);
+      if (!member) {
+        this.destroy();
+        this.onEmpty?.(this.id);
+        return;
+      }
+      const sock = member.socketId && this.io.sockets.sockets.get(member.socketId);
+      if (sock) {
+        sock.emit('kicked', { reason: 'Room closed after inactivity.' });
+        sock.leave(this.id);
+        delete sock.data.roomId;
+        delete sock.data.seatIndex;
+        delete sock.data.memberToken;
+      }
+      this.destroy();
+      this.onEmpty?.(this.id);
+    }, this.soloIdleMs);
   }
 
   isMidHand() {
@@ -209,6 +269,7 @@ class Room {
     if (isHost || !this.hostToken) this.hostToken = token;
 
     this.message = `${displayName} joined the table.`;
+    this.clearSoloIdleTimer();
     this.syncTable();
     return {
       ok: true,
@@ -241,6 +302,7 @@ class Room {
     socket.data.memberToken = token;
 
     this.message = `${displayName} reconnected.`;
+    this.clearSoloIdleTimer();
     this.pushTableState();
     this.checkDisconnectedActiveTurn();
     return {
@@ -309,6 +371,7 @@ class Room {
     const wasHost = token === this.hostToken;
     this.membersByToken.delete(token);
     if (this.membersByToken.size === 0) {
+      this.destroy();
       this.onEmpty?.(this.id);
       return;
     }
@@ -319,26 +382,40 @@ class Room {
       ? `${leftName} timed out and left the table.`
       : `${leftName} left the table.`;
 
+    this.afterMemberDeparture();
+
     if (this.status === 'lobby') {
-      this.reindexMembers();
+      if (this.canChangeSettings()) this.reindexMembers();
       this.syncTable();
       return;
     }
 
     if (this.game) {
       const player = this.game.players[seat];
-      if (player && this.game.phase !== 'idle' && this.game.phase !== 'showdown' && !player.folded) {
-        this.game.applyAction(player, 'fold');
-        this.game.handHistory.push(timedOut
-          ? `${player.name} timed out (folded)`
-          : `${player.name} disconnected (folded)`);
-        this.game.actedThisRound.add(seat);
-        this.game.afterAction();
-      } else {
-        this.reindexMembers();
-        this.syncGamePlayers();
-        this.broadcastGameState();
+      let resumeHand = false;
+      if (player && this.isMidHand() && !player.folded) {
+        if (this.game.applyAction(player, 'fold')) {
+          this.game.handHistory.push(timedOut
+            ? `${player.name} timed out (folded)`
+            : `${player.name} disconnected (folded)`);
+          this.game.actedThisRound.add(seat);
+          resumeHand = true;
+        }
       }
+      if (this.canChangeSettings()) this.reindexMembers();
+      this.syncGamePlayers();
+      if (resumeHand) this.game.afterAction();
+      else this.broadcastGameState();
+      if (this.isMidHand()) this.checkDisconnectedActiveTurn();
+    }
+  }
+
+  afterMemberDeparture() {
+    if (this.isSoloContinuation()) {
+      this.message = `${this.message} Empty seats are filled by bots until others join.`;
+      this.refreshSoloIdleCleanup();
+    } else {
+      this.clearSoloIdleTimer();
     }
   }
 
@@ -446,14 +523,15 @@ class Room {
     if (!member || member.token !== this.hostToken) {
       return { ok: false, error: 'Only the host can deal.' };
     }
-    if (this.connectedMemberCount() < 2) {
-      return { ok: false, error: 'Need at least 2 players to start.' };
+    if (this.connectedMemberCount() < 1) {
+      return { ok: false, error: 'No players connected.' };
     }
     if (this.game && this.game.phase !== 'idle' && this.game.phase !== 'showdown') {
       return { ok: false, error: 'Hand already in progress.' };
     }
 
     this.status = 'active';
+    this.clearSoloIdleTimer();
     this.ensureGame();
     this.syncGamePlayers();
     this.game.startNewHand();
@@ -484,7 +562,7 @@ class Room {
 
   syncGamePlayers() {
     if (!this.game) return;
-    const members = this.allMembers();
+    const members = this.playMembers();
     this.game.startingStack = this.settings.startingStack;
     this.game.setOnlinePlayers(members, this.settings.playerCount, this.status === 'lobby');
     this.game.bigBlind = this.settings.bigBlind;
