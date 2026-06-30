@@ -94,6 +94,92 @@ export function getPotContext(game, playerIndex) {
   };
 }
 
+/**
+ * Effective stack depth, SPR, and commitment — shapes preflop ranges and postflop pot control.
+ */
+export function getStackContext(game, player, playerIndex) {
+  const bb = Math.max(game.bigBlind, 1);
+  const heroTotal = player.chips + player.bet;
+  const stackBB = heroTotal / bb;
+
+  let effectiveChips = heroTotal;
+  for (const p of game.players) {
+    if (!p.inHand || p.folded) continue;
+    effectiveChips = Math.min(effectiveChips, p.chips + p.bet);
+  }
+  const effectiveStackBB = effectiveChips / bb;
+
+  const toCall = Math.max(0, game.currentBet - player.bet);
+  const potAfterCall = Math.max(game.pot + toCall, bb);
+  const spr = effectiveChips / potAfterCall;
+
+  const callFraction = heroTotal > 0 ? toCall / heroTotal : 0;
+  const isAllInFacing = toCall > 0 && toCall >= player.chips;
+  const isShort = effectiveStackBB < 22;
+  const isShallow = effectiveStackBB < 40;
+  const isDeep = effectiveStackBB > 75;
+  const isVeryDeep = effectiveStackBB > 110;
+  const lowSpr = spr < 4;
+  const highSpr = spr > 11;
+  const isPotCommitted = callFraction >= 0.38 || lowSpr;
+
+  let callCapMult = 1;
+  if (isShallow) callCapMult *= 0.82;
+  if (isShort) callCapMult *= 0.68;
+  if (isDeep) callCapMult *= 1.1;
+  if (isVeryDeep) callCapMult *= 1.16;
+  if (lowSpr && game.community.length > 0) callCapMult *= 1.12;
+  if (highSpr && game.community.length > 0) callCapMult *= 0.9;
+
+  let speculativeMult = 1;
+  if (isDeep) speculativeMult = 1.22;
+  if (isVeryDeep) speculativeMult = 1.32;
+  if (isShallow) speculativeMult = 0.62;
+  if (isShort) speculativeMult = 0.42;
+
+  let bluffMult = 1;
+  if (isShallow) bluffMult = 0.72;
+  if (isShort) bluffMult = 0.55;
+  if (isDeep) bluffMult = 1.12;
+
+  let openThresholdAdj = 0;
+  if (isShort) openThresholdAdj = 0.09;
+  else if (isShallow) openThresholdAdj = 0.04;
+  else if (isDeep) openThresholdAdj = -0.03;
+  else if (isVeryDeep) openThresholdAdj = -0.05;
+
+  let sizingMult = 1;
+  if (isShallow) sizingMult = 0.88;
+  if (isShort) sizingMult = 0.78;
+  if (isDeep) sizingMult = 1.06;
+
+  return {
+    stackBB,
+    effectiveStackBB,
+    spr,
+    callFraction,
+    isAllInFacing,
+    isShort,
+    isShallow,
+    isDeep,
+    isVeryDeep,
+    lowSpr,
+    highSpr,
+    isPotCommitted,
+    callCapMult,
+    speculativeMult,
+    bluffMult,
+    openThresholdAdj,
+    sizingMult,
+  };
+}
+
+/** Max chips willing to put in relative to stack (uses facing size + depth). */
+function withinStackCallCap(toCall, player, baseFraction, facing, stackCtx) {
+  const mult = (facing.stackFoldMult ?? 1) * stackCtx.callCapMult;
+  return toCall <= player.chips * baseFraction * mult;
+}
+
 function coldCallTightness(pressure) {
   if (pressure <= 0) return 1;
   if (pressure === 1) return 0.78;
@@ -181,6 +267,15 @@ export function getFacingBetAnalysis(game, player) {
     else sizeCategory = 'overbet';
   }
 
+  const heroTotal = player.chips + player.bet;
+  const commitRatio = heroTotal > 0 ? toCall / heroTotal : 0;
+  const ranks = ['small', 'medium', 'large', 'overbet'];
+  let rankIdx = ranks.indexOf(sizeCategory);
+  if (commitRatio >= 0.35 && rankIdx < 3) rankIdx += 1;
+  if (commitRatio >= 0.55 && rankIdx < 3) rankIdx = Math.max(rankIdx, 2);
+  if (commitRatio >= 0.8 || toCall >= player.chips) rankIdx = 3;
+  sizeCategory = ranks[rankIdx];
+
   const base = { ...SIZE_REACTION[sizeCategory] };
   let reraiseExtra = base.reraiseExtra;
   if (isPreflop) {
@@ -237,7 +332,7 @@ function trapCautionMult(trapLine) {
   return Math.max(0.4, 1 - trapLine.trapRisk * 0.65);
 }
 
-function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
+function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, stackCtx) {
   const toCall = game.currentBet - player.bet;
   if (toCall > 0) return null;
 
@@ -245,6 +340,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
   const heroIndex = game.players.indexOf(player);
   const trapLine = getOpponentTrapLine(game, heroIndex);
   const trapMult = trapCautionMult(trapLine);
+  const depthMult = stackCtx.sizingMult * (stackCtx.isShort ? 0.85 : 1);
 
   const betForStreet = (street) => {
     const frac = street === 'flop'
@@ -252,7 +348,8 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
       : street === 'turn'
         ? 0.55 + aggression * 0.15
         : 0.62 + aggression * 0.18;
-    return Math.min(player.chips, Math.max(game.minRaise, Math.floor(game.pot * frac)));
+    const sized = frac * depthMult;
+    return Math.min(player.chips, Math.max(game.minRaise, Math.floor(game.pot * sized)));
   };
 
   const makeBet = (amt, meta) => ({
@@ -284,7 +381,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
       const amt = betForStreet('flop');
       if (amt > 0) return makeBet(amt, { isCbet: true, isSemiBluff: true });
     }
-    if (hand.category === 'air' && Math.random() < freq * 0.55) {
+    if (hand.category === 'air' && Math.random() < freq * 0.55 * stackCtx.bluffMult) {
       const amt = betForStreet('flop');
       if (amt > 0) return makeBet(amt, { isCbet: true, isBluff: true });
     }
@@ -314,7 +411,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
       const amt = betForStreet('turn');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 2, isSemiBluff: true });
     }
-    if (hand.category === 'air' && Math.random() < barrelFreq * 0.35) {
+    if (hand.category === 'air' && Math.random() < barrelFreq * 0.35 * stackCtx.bluffMult) {
       const amt = betForStreet('turn');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 2, isBluff: true });
     }
@@ -330,7 +427,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
       const amt = betForStreet('river');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 3 });
     }
-    if (hand.category === 'air' && Math.random() < tripleFreq) {
+    if (hand.category === 'air' && Math.random() < tripleFreq * stackCtx.bluffMult) {
       const amt = betForStreet('river');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 3, isBluff: true });
     }
@@ -341,7 +438,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx) {
 }
 
 /** Defender vs c-bet / barrel. */
-function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead) {
+function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead, stackCtx) {
   const toCall = game.currentBet - player.bet;
   if (toCall <= 0) return null;
 
@@ -353,14 +450,24 @@ function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCt
   const isCbet = game.phase === 'flop' && game.bettingLine.barrelCount === 1;
   const isBarrel = game.phase === 'turn' || game.phase === 'river';
   const mwFoldBias = potCtx.isMultiway ? 0.12 : 0;
+  const lineScore = bettor >= 0 ? scoreVillainLine(game, bettor) : { trapRisk: 0, slowplay: false };
+  const trapRespect = lineScore.slowplay || lineScore.trapRisk >= 0.32;
 
-  if (hand.category === 'premium') return { action: 'call' };
+  if (hand.category === 'premium') {
+    if (stackCtx.isPotCommitted || stackCtx.lowSpr) return { action: 'call' };
+    return { action: 'call' };
+  }
   if (hand.category === 'draw') {
     const potOdds = toCall / (game.pot + toCall);
-    const need = 0.32 + hand.draws.drawStrength * 0.2 + mwFoldBias;
+    let need = 0.32 + hand.draws.drawStrength * 0.2 + mwFoldBias;
+    if (stackCtx.isDeep) need -= 0.04;
+    if (stackCtx.isShallow) need += 0.05;
     if (potOdds < need) return { action: 'call' };
     if (isBarrel && facing.sizeCategory === 'large') return { action: 'fold' };
     if (potCtx.isMultiway && facing.sizeCategory !== 'small') return { action: 'fold' };
+    if (stackCtx.isShallow && facing.sizeCategory === 'medium' && hand.draws.drawStrength < 0.55) {
+      return { action: 'fold' };
+    }
     return { action: 'call' };
   }
   if (hand.category === 'marginal') {
@@ -382,16 +489,26 @@ function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCt
     }
     if (isBarrel && facing.sizeCategory !== 'small') {
       if (isWeakPair(hand) && !oppRead.isStabBluffer) return { action: 'fold' };
-      if (tier === 'middle' && Math.random() > aggression * 0.45 + floatBonus) return { action: 'fold' };
+      if (stackCtx.highSpr && tier === 'middle' && !stackCtx.isPotCommitted) {
+        if (Math.random() > aggression * 0.4 + floatBonus) return { action: 'fold' };
+      } else if (tier === 'middle' && Math.random() > aggression * 0.45 + floatBonus) {
+        return { action: 'fold' };
+      }
       if (Math.random() > aggression * 0.5 + (oppRead.isStabBluffer ? -0.12 : 0)) return { action: 'fold' };
     }
     const potOdds = toCall / (game.pot + toCall);
-    const callThreshold = (tier === 'top' || tier === 'overpair' ? 0.32
+    let callThreshold = (tier === 'top' || tier === 'overpair' ? 0.32
       : tier === 'middle' ? 0.28
         : tier === 'bottom' ? 0.22
           : tier === 'underpair' ? 0.18
             : 0.28) + floatBonus;
+    if (stackCtx.lowSpr && (tier === 'top' || tier === 'overpair')) callThreshold += 0.08;
+    if (stackCtx.highSpr && tier === 'middle') callThreshold -= 0.04;
     if (potOdds < callThreshold) return { action: 'call' };
+    if (withinStackCallCap(toCall, player, callThreshold, facing, stackCtx) && stackCtx.isPotCommitted
+        && (tier === 'top' || tier === 'overpair')) {
+      return { action: 'call' };
+    }
     return { action: 'fold' };
   }
   // air vs barrel — float more vs stab-happy bluffers
@@ -403,7 +520,7 @@ function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCt
 }
 
 /** Facing a probe / stab (non–c-bet lead when checked to). */
-function decideVsProbe(player, game, hand, aggression, facing, potCtx, oppRead) {
+function decideVsProbe(player, game, hand, aggression, facing, potCtx, oppRead, stackCtx) {
   const toCall = game.currentBet - player.bet;
   if (toCall <= 0) return null;
 
@@ -421,7 +538,9 @@ function decideVsProbe(player, game, hand, aggression, facing, potCtx, oppRead) 
 
   if (hand.category === 'draw') {
     const need = 0.3 + hand.draws.drawStrength * 0.22
-      - (oppRead.isStabBluffer ? 0.06 : 0);
+      - (oppRead.isStabBluffer ? 0.06 : 0)
+      - (stackCtx.isDeep ? 0.04 : 0)
+      + (stackCtx.isShallow ? 0.05 : 0);
     if (trapRespect && facing.sizeCategory === 'large') return { action: 'fold' };
     if (potOdds < need * oppRead.floatMult) return { action: 'call' };
     if (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet') return { action: 'fold' };
@@ -437,7 +556,12 @@ function decideVsProbe(player, game, hand, aggression, facing, potCtx, oppRead) 
       const threshold = 0.3 + oppRead.callThresholdBonus;
       if (potOdds < threshold * oppRead.floatMult) return { action: 'call' };
     }
-    if (isStrongPair(hand) && facing.sizeCategory !== 'overbet') return { action: 'call' };
+    if (isStrongPair(hand) && facing.sizeCategory !== 'overbet') {
+      if (stackCtx.highSpr && facing.sizeCategory === 'large' && !stackCtx.isPotCommitted) {
+        return { action: 'fold' };
+      }
+      return { action: 'call' };
+    }
     if (isWeakPair(hand) && !oppRead.isStabBluffer) return { action: 'fold' };
     if (potOdds < 0.24 + oppRead.callThresholdBonus) return { action: 'call' };
     return { action: 'fold' };
@@ -461,7 +585,7 @@ function isFacingStreetBet(game, playerIndex) {
 }
 
 /** Facing a bet after checking this street (or facing a re-raise). */
-function decideCheckRaise(player, game, hand, aggression, facing, potCtx, blockers, playerIndex, oppRead) {
+function decideCheckRaise(player, game, hand, aggression, facing, potCtx, blockers, playerIndex, oppRead, stackCtx) {
   if (!isFacingStreetBet(game, playerIndex)) return null;
 
   const toCall = game.currentBet - player.bet;
@@ -471,7 +595,8 @@ function decideCheckRaise(player, game, hand, aggression, facing, potCtx, blocke
 
   const raiseAmt = () => {
     const multiplier = 2.2 + aggression * 0.8 + blockerBonus * 0.4;
-    const target = Math.floor(toCall * multiplier + game.pot * (0.22 + aggression * 0.12));
+    const depthBoost = stackCtx.isShallow ? 1.15 : stackCtx.isDeep ? 0.95 : 1;
+    const target = Math.floor((toCall * multiplier + game.pot * (0.22 + aggression * 0.12)) * depthBoost);
     const minExtra = game.currentBet + game.minRaise - player.bet;
     return Math.min(player.chips - toCall, Math.max(minExtra, target));
   };
@@ -495,6 +620,7 @@ function decideCheckRaise(player, game, hand, aggression, facing, potCtx, blocke
 
   if (hand.category === 'draw') {
     if (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet') return null;
+    if (stackCtx.isShallow && stackCtx.callFraction > 0.25) return null;
     const freq = (0.2 + aggression * 0.32 + blockerBonus * 0.28) * mw * crMult;
     if (Math.random() < freq) return makeCR({ isSemiBluff: true });
   }
@@ -536,14 +662,15 @@ function decideCheckRaise(player, game, hand, aggression, facing, potCtx, blocke
 }
 
 /** Polar overbet when checked to (non–c-bet spots or river). */
-function decideOverbetLine(player, game, hand, aggression, barrelCtx, potCtx, blockers) {
+function decideOverbetLine(player, game, hand, aggression, barrelCtx, potCtx, blockers, stackCtx) {
   if (game.currentBet > player.bet || game.community.length === 0) return null;
   if (barrelCtx.isCbetSpot || barrelCtx.isTurnBarrelSpot || barrelCtx.isRiverBarrelSpot) return null;
 
   const mw = potCtx.multiwayScalar;
   if (potCtx.isMultiway && game.phase !== 'river') return null;
+  if (stackCtx.isShallow && stackCtx.effectiveStackBB < 30) return null;
 
-  const overbetFrac = 1.05 + aggression * 0.4 + blockers.score * 0.15;
+  const overbetFrac = (1.05 + aggression * 0.4 + blockers.score * 0.15) * stackCtx.sizingMult;
   const amt = Math.min(
     player.chips,
     Math.max(game.minRaise, Math.floor(game.pot * overbetFrac)),
@@ -567,7 +694,7 @@ function decideOverbetLine(player, game, hand, aggression, barrelCtx, potCtx, bl
   }
 
   if (polarBluff && isRiver && !barrelCtx.isAggressor) {
-    const freq = (0.08 + aggression * 0.18 + blockers.score * 0.28) * mw;
+    const freq = (0.08 + aggression * 0.18 + blockers.score * 0.28) * mw * stackCtx.bluffMult;
     if (Math.random() < freq) return makeOb({ isBluff: true });
   }
 
@@ -577,14 +704,17 @@ function decideOverbetLine(player, game, hand, aggression, barrelCtx, potCtx, bl
 /** Iso-raise limpers — wider and larger vs players who limp too often. */
 function decidePreflopIso(
   player, game, hand, aggression, posTier, pos, potCtx, limpRead,
-  canCheck, facing, effectiveStrength, tryIsoRaise,
+  canCheck, facing, effectiveStrength, tryIsoRaise, stackCtx,
 ) {
   if (!limpRead?.isLimpPot) return null;
 
   const punish = limpRead.isLimpHappy;
-  const mw = potCtx.multiwayScalar;
+  const mw = potCtx.multiwayScalar * stackCtx.speculativeMult;
 
   if (hand.category === 'premium') {
+    if (stackCtx.isShort && (canCheck || facing.facing)) {
+      return { action: 'raise', amount: player.bet + player.chips };
+    }
     if (canCheck || (facing.facing && facing.openBB <= 2.5)) {
       const raised = tryIsoRaise(false);
       if (raised) return raised;
@@ -604,7 +734,7 @@ function decidePreflopIso(
         }
       }
     }
-    if (hand.category === 'speculative' && (posTier === 'late' || posTier === 'btn')) {
+    if (hand.category === 'speculative' && (posTier === 'late' || posTier === 'btn') && !stackCtx.isShallow) {
       const freq = (0.12 + aggression * 0.3) * (punish ? 1.4 : 0.65) * mw;
       if (Math.random() < freq) {
         const raised = tryIsoRaise(true);
@@ -859,6 +989,7 @@ export function decideAction(player, game) {
   const pos = POSITION[posTier];
   const barrelCtx = getBarrelContext(game, playerIndex);
   const potCtx = getPotContext(game, playerIndex);
+  const stackCtx = getStackContext(game, player, playerIndex);
   const villainIndex = getPrimaryVillain(game, playerIndex);
   const oppRead = getOpponentRead(game, villainIndex);
   const limpRead = isPreflop ? getLimpedPotRead(game, playerIndex) : null;
@@ -889,46 +1020,50 @@ export function decideAction(player, game) {
   if (!isPreflop) {
     if (!canCheck) {
       const checkRaise = decideCheckRaise(
-        player, game, hand, aggression, facing, potCtx, blockers, playerIndex, oppRead,
+        player, game, hand, aggression, facing, potCtx, blockers, playerIndex, oppRead, stackCtx,
       );
       if (checkRaise) return checkRaise;
     } else {
-      const barrelAction = decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx);
+      const barrelAction = decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, stackCtx);
       if (barrelAction) return barrelAction;
 
       const overbet = decideOverbetLine(
-        player, game, hand, aggression, barrelCtx, potCtx, blockers,
+        player, game, hand, aggression, barrelCtx, potCtx, blockers, stackCtx,
       );
       if (overbet) return overbet;
     }
 
     const defendAction = decideVsBarrel(
-      player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead,
+      player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead, stackCtx,
     );
     if (defendAction) return defendAction;
 
     const probeAction = decideVsProbe(
-      player, game, hand, aggression, facing, potCtx, oppRead,
+      player, game, hand, aggression, facing, potCtx, oppRead, stackCtx,
     );
     if (probeAction) return probeAction;
   }
 
-  let effectiveStrength = strength - pos.strengthAdj;
+  let effectiveStrength = strength - pos.strengthAdj + stackCtx.openThresholdAdj;
   if (facing.facing) {
     effectiveStrength -= facing.strengthPenalty;
     effectiveStrength -= potCtx.callers * 0.04;
     effectiveStrength -= potCtx.playersBehind * 0.035;
     if (!isPreflop && potCtx.isMultiway) effectiveStrength -= 0.03;
+    if (stackCtx.isShallow && !isPreflop) effectiveStrength -= 0.03;
+    if (stackCtx.isDeep && isPreflop) effectiveStrength += 0.02;
   }
 
   const bluffRoll = Math.random() < 0.14 * aggression * pos.bluffMult * potCtx.multiwayScalar
+    * stackCtx.bluffMult
     * (facing.sizeCategory === 'overbet' ? 0.25 : facing.sizeCategory === 'large' ? 0.5 : 1);
 
   const raiseSize = () => {
     const potFactor = facing.facing && facing.sizeCategory === 'small'
       ? 0.55 + aggression * 0.45
       : 0.45 + aggression * 0.55;
-    return Math.min(player.chips, Math.max(game.minRaise, Math.floor(game.pot * potFactor)));
+    const sized = potFactor * stackCtx.sizingMult;
+    return Math.min(player.chips, Math.max(game.minRaise, Math.floor(game.pot * sized)));
   };
 
   const tryRaise = (isBluff, isSemiBluff = false) => {
@@ -957,14 +1092,18 @@ export function decideAction(player, game) {
   if (isPreflop) {
     const isoAction = decidePreflopIso(
       player, game, hand, aggression, posTier, pos, potCtx, limpRead,
-      canCheck, facing, effectiveStrength, tryIsoRaise,
+      canCheck, facing, effectiveStrength, tryIsoRaise, stackCtx,
     );
     if (isoAction) return isoAction;
   }
 
   if (hand.category === 'premium') {
-    const valueThreshold = pos.openThreshold - aggression * 0.05 + facing.reraiseExtra;
+    const valueThreshold = pos.openThreshold - aggression * 0.05 + facing.reraiseExtra
+      + stackCtx.openThresholdAdj;
     if (effectiveStrength > valueThreshold) {
+      if (stackCtx.isShort && (facing.facing || !canCheck) && player.chips > 0) {
+        return { action: 'raise', amount: player.bet + player.chips };
+      }
       const trapCheck = canCheck && !isPreflop && potCtx.isHeadsUp
         && blockers.score >= 0.18
         && Math.random() < 0.12 + aggression * 0.1;
@@ -994,13 +1133,13 @@ export function decideAction(player, game) {
     if (!canCheck) {
       const cold = coldCallTightness(potCtx.coldCallPressure);
       const drawPotOdds = (0.28 + drawPower * 0.25 - (facing.sizeCategory === 'small' ? 0.06 : 0)) * cold;
-      const stackCap = (0.28 + drawPower * 0.2) * cold;
-      if (potOdds <= drawPotOdds && toCall <= player.chips * stackCap) {
+      const stackCap = (0.28 + drawPower * 0.2) * cold * stackCtx.speculativeMult;
+      if (potOdds <= drawPotOdds && withinStackCallCap(toCall, player, stackCap, facing, stackCtx)) {
         return { action: 'call' };
       }
       if (facing.sizeCategory === 'overbet') return { action: 'fold' };
       if (facing.sizeCategory === 'large' && drawPower < 0.5) return { action: 'fold' };
-      if (toCall <= player.chips * 0.15) return { action: 'call' };
+      if (withinStackCallCap(toCall, player, 0.15, facing, stackCtx)) return { action: 'call' };
       return { action: 'fold' };
     }
     return { action: 'check' };
@@ -1044,7 +1183,8 @@ export function decideAction(player, game) {
         return { action: 'fold' };
       }
       let maxBB = (posTier === 'late' || posTier === 'btn') ? 2.5 : 1.5;
-      maxBB *= cold;
+      maxBB *= cold * stackCtx.speculativeMult;
+      if (stackCtx.isShort && hand.strength < 0.42) return { action: 'fold' };
       if (potCtx.coldCallPressure >= 2 && posTier !== 'btn') return { action: 'fold' };
       if (toCall <= game.bigBlind * maxBB && (posTier === 'late' || posTier === 'btn' || cold >= 0.7)) {
         return { action: 'call' };
@@ -1080,17 +1220,22 @@ export function decideAction(player, game) {
       }
     }
     const callLimitAdj = oppRead.isStabBluffer ? 0.04 : 0;
-    if (potOdds < 0.3 * cold && toCall <= player.chips * (callLimit + callLimitAdj)) {
+    const callFrac = (callLimit + callLimitAdj) * stackCtx.callCapMult;
+    if (potOdds < 0.3 * cold && withinStackCallCap(toCall, player, callFrac, facing, stackCtx)) {
       return { action: 'call' };
     }
-    if (toCall <= game.bigBlind * 2 * cold && facing.sizeCategory !== 'overbet' && !isWeakPair(hand)) {
+    if (stackCtx.lowSpr && (isStrongPair(hand) || tier === 'top' || tier === 'overpair')) {
+      return { action: 'call' };
+    }
+    if (toCall <= game.bigBlind * 2 * cold * stackCtx.speculativeMult
+        && facing.sizeCategory !== 'overbet' && !isWeakPair(hand)) {
       return { action: 'call' };
     }
     return { action: 'fold' };
   }
 
   if (canCheck) return { action: 'check' };
-  if (toCall <= player.chips * 0.2) return { action: 'call' };
+  if (withinStackCallCap(toCall, player, 0.2, facing, stackCtx)) return { action: 'call' };
   return { action: 'fold' };
 }
 
