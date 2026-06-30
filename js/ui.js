@@ -163,6 +163,11 @@ function formatRebuyLimit(maxRebuys) {
   return `${maxRebuys} rebuy${maxRebuys === 1 ? '' : 's'}/player`;
 }
 
+function formatAnteSetting(anteFraction) {
+  if (!anteFraction) return null;
+  return anteFraction === 1 ? '1 BB ante' : '½ BB ante';
+}
+
 export function showJoinModal(elements, roomId = '', { invited = false } = {}) {
   const {
     joinModal, joinModalRoomInput, joinModalName, joinModalError,
@@ -267,6 +272,9 @@ export function renderTableDetails(elements, info) {
   if (elements.bigBlindSelect && info.settings?.bigBlind) {
     elements.bigBlindSelect.value = String(info.settings.bigBlind);
   }
+  if (elements.anteSelect && info.settings?.anteFraction !== undefined) {
+    elements.anteSelect.value = String(info.settings.anteFraction);
+  }
 
   if (lobbyTableSettings && info.settings && info.members) {
     const connected = info.members.filter(m => m.connected !== false).length;
@@ -274,8 +282,10 @@ export function renderTableDetails(elements, info) {
     const bots = Math.max(0, info.settings.playerCount - humans);
     const stack = info.settings.startingStack ?? 1000;
     const rebuyText = formatRebuyLimit(info.settings.maxRebuys ?? 3);
+    const anteText = formatAnteSetting(info.settings.anteFraction ?? 0);
+    const antePart = anteText ? ` · ${anteText}` : '';
     lobbyTableSettings.textContent =
-      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB · ${rebuyText}`;
+      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB · ${rebuyText}${antePart}`;
   }
 }
 
@@ -317,6 +327,7 @@ export function buildTableInfo(game) {
       bigBlind: game.bigBlind,
       startingStack: game.startingStack,
       maxRebuys: game.maxRebuys,
+      anteFraction: game.anteFraction ?? 0,
     },
     status: game.roomStatus,
   };
@@ -428,7 +439,7 @@ function renderControls(game, elements) {
   const {
     controls, foldBtn, checkBtn, callBtn, raiseBtn, raiseSlider, raiseInput,
     allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, resetSoloBtn, bigBlindSelect,
-    startingStackSelect, addBotBtn, removeBotBtn, botCountLabel, tableSizeHint,
+    startingStackSelect, anteSelect, addBotBtn, removeBotBtn, botCountLabel, tableSizeHint,
     maxRebuysWrap, maxRebuysSelect,
     setupBar, skipBar, skipBtn, displayModeBar, displayDollarsBtn, displayBBBtn,
   } = elements;
@@ -475,6 +486,10 @@ function renderControls(game, elements) {
   if (bigBlindSelect) {
     bigBlindSelect.value = String(game.bigBlind);
     bigBlindSelect.disabled = configDisabled || lockTableMeta;
+  }
+  if (anteSelect) {
+    anteSelect.value = String(game.anteFraction ?? 0);
+    anteSelect.disabled = configDisabled || lockTableMeta;
   }
   if (maxRebuysWrap) {
     maxRebuysWrap.classList.toggle('hidden', !game.onlineMode || !game.isHost);

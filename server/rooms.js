@@ -47,7 +47,7 @@ class Room {
     this.onEmpty = onEmpty;
     this.membersByToken = new Map();
     this.status = 'lobby';
-    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000, maxRebuys: 3 };
+    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0 };
     this.game = null;
     this.message = 'Waiting for players…';
     this.disconnectGraceMs = 90_000;
@@ -503,12 +503,16 @@ class Room {
     let maxRebuys = parseInt(settings.maxRebuys, 10);
     if (!Number.isFinite(maxRebuys)) maxRebuys = this.settings.maxRebuys ?? 3;
     maxRebuys = Math.max(-1, Math.min(10, maxRebuys));
+    let anteFraction = Number(settings.anteFraction);
+    if (![0, 0.5, 1].includes(anteFraction)) anteFraction = this.settings.anteFraction ?? 0;
     this.settings.playerCount = playerCount;
     this.settings.bigBlind = bigBlind;
     this.settings.startingStack = startingStack;
     this.settings.maxRebuys = maxRebuys;
+    this.settings.anteFraction = anteFraction;
     if (this.game) {
       this.game.startingStack = startingStack;
+      this.game.anteFraction = anteFraction;
       this.syncGamePlayers();
       if (this.status === 'lobby') {
         for (const p of this.game.players) p.chips = startingStack;
@@ -557,6 +561,7 @@ class Room {
     this.game.playerCount = this.settings.playerCount;
     this.game.bigBlind = this.settings.bigBlind;
     this.game.startingStack = this.settings.startingStack;
+    this.game.anteFraction = this.settings.anteFraction ?? 0;
     this.game.minRaise = this.settings.bigBlind;
   }
 
@@ -566,6 +571,7 @@ class Room {
     this.game.startingStack = this.settings.startingStack;
     this.game.setOnlinePlayers(members, this.settings.playerCount, this.status === 'lobby');
     this.game.bigBlind = this.settings.bigBlind;
+    this.game.anteFraction = this.settings.anteFraction ?? 0;
     this.game.minRaise = this.settings.bigBlind;
     if (this.status === 'lobby') {
       for (const p of this.game.players) p.chips = this.settings.startingStack;

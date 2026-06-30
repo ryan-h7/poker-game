@@ -44,6 +44,7 @@ export class PokerGame {
     this.playerCount = 4;
     this.bigBlind = 20;
     this.startingStack = DEFAULT_STARTING_STACK;
+    this.anteFraction = 0;
     this.maxRebuys = 3;
     this.localRebuyCount = 0;
     this.dealerIndex = 0;
@@ -192,6 +193,7 @@ export class PokerGame {
       playerCount: this.playerCount,
       bigBlind: this.bigBlind,
       startingStack: this.startingStack,
+      anteFraction: this.anteFraction,
       dealerIndex: this.dealerIndex,
       phase: this.phase,
       community: cloneCards(this.community),
@@ -223,6 +225,7 @@ export class PokerGame {
     this.playerCount = state.playerCount;
     this.bigBlind = state.bigBlind;
     if (state.startingStack) this.startingStack = state.startingStack;
+    if (state.anteFraction !== undefined) this.anteFraction = state.anteFraction;
     if (state.maxRebuys !== undefined) this.maxRebuys = state.maxRebuys;
     if (state.localRebuyCount !== undefined) this.localRebuyCount = state.localRebuyCount;
     this.dealerIndex = state.dealerIndex;
@@ -334,6 +337,27 @@ export class PokerGame {
     return Math.max(1, Math.floor(this.bigBlind / 2));
   }
 
+  getAnte() {
+    if (!this.anteFraction) return 0;
+    if (this.anteFraction >= 1) return this.bigBlind;
+    return Math.max(1, Math.floor(this.bigBlind * this.anteFraction));
+  }
+
+  setAnteFraction(fraction) {
+    if (this.onlineMode && !this.serverMode) return false;
+    if (this.phase !== 'idle' && this.phase !== 'showdown') return false;
+    const allowed = [0, 0.5, 1];
+    const value = Number(fraction);
+    if (!allowed.includes(value)) return false;
+    this.anteFraction = value;
+    const ante = this.getAnte();
+    this.onMessage(ante > 0
+      ? `Ante set to ${this.formatAmount(ante)} per player.`
+      : 'Ante disabled.');
+    this.onUpdate();
+    return true;
+  }
+
   setShowBotHandsAtEnd(enabled) {
     this.showBotHandsAtEnd = enabled;
     if (!enabled) this.handsRevealed = false;
@@ -404,6 +428,7 @@ export class PokerGame {
       playerCount: this.playerCount,
       bigBlind: this.bigBlind,
       startingStack: this.startingStack,
+      anteFraction: this.anteFraction,
       dealerIndex: this.dealerIndex,
       phase: this.phase,
       deck: cloneCards(this.deck),
@@ -450,6 +475,7 @@ export class PokerGame {
     this.playerCount = state.playerCount;
     this.bigBlind = state.bigBlind;
     this.startingStack = state.startingStack;
+    this.anteFraction = state.anteFraction ?? 0;
     this.dealerIndex = state.dealerIndex;
     this.phase = state.phase;
     this.deck = cloneCards(state.deck || []);
@@ -857,6 +883,8 @@ export class PokerGame {
       }
     }
 
+    this.postAntes();
+
     const sbIndex = this.nextActive(this.dealerIndex);
     const bbIndex = this.nextActive(sbIndex);
 
@@ -925,6 +953,20 @@ export class PokerGame {
     p.bet = actual;
     this.pot += actual;
     this.handHistory.push(`${p.name} posts ${label} (${this.formatAmount(actual)})`);
+  }
+
+  postAntes() {
+    const ante = this.getAnte();
+    if (ante <= 0) return;
+    for (let i = 0; i < this.players.length; i++) {
+      const p = this.players[i];
+      if (!p.inHand) continue;
+      const actual = Math.min(ante, p.chips);
+      if (actual <= 0) continue;
+      p.chips -= actual;
+      this.pot += actual;
+      this.handHistory.push(`${p.name} posts ante (${this.formatAmount(actual)})`);
+    }
   }
 
   nextActive(from) {

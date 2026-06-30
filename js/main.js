@@ -39,6 +39,7 @@ const elements = {
   tableSizeHint: document.getElementById('table-size-hint'),
   startingStackSelect: document.getElementById('starting-stack'),
   bigBlindSelect: document.getElementById('big-blind'),
+  anteSelect: document.getElementById('ante'),
   maxRebuysWrap: document.getElementById('max-rebuys-wrap'),
   maxRebuysSelect: document.getElementById('max-rebuys'),
   setupBar: document.getElementById('setup-bar'),
@@ -453,6 +454,9 @@ function syncSoloUIFromGame() {
   if (elements.bigBlindSelect) {
     elements.bigBlindSelect.value = String(game.bigBlind);
   }
+  if (elements.anteSelect) {
+    elements.anteSelect.value = String(game.anteFraction ?? 0);
+  }
 }
 
 try {
@@ -496,6 +500,7 @@ const network = new NetworkClient({
     game.bigBlind = lobby.settings.bigBlind;
     game.startingStack = lobby.settings.startingStack ?? 1000;
     game.maxRebuys = lobby.settings.maxRebuys ?? 3;
+    game.anteFraction = lobby.settings.anteFraction ?? 0;
     game.roomId = lobby.roomId;
     game.inviteLink = lobby.inviteLink || game.inviteLink;
     game.setOnlinePlayers(lobby.members, lobby.settings.playerCount, true);
@@ -571,6 +576,7 @@ function getTableSettings() {
     bigBlind: parseInt(elements.bigBlindSelect.value, 10),
     startingStack: parseInt(elements.startingStackSelect.value, 10),
     maxRebuys: parseInt(elements.maxRebuysSelect?.value ?? '3', 10),
+    anteFraction: Number(elements.anteSelect?.value ?? 0),
   };
 }
 
@@ -588,6 +594,7 @@ async function pushTableSettings(patch = {}) {
   else if (patch.startingStack !== undefined) game.setStartingStack(settings.startingStack);
   else if (patch.bigBlind !== undefined) game.setBigBlind(settings.bigBlind);
   else if (patch.maxRebuys !== undefined) game.maxRebuys = settings.maxRebuys;
+  else if (patch.anteFraction !== undefined) game.anteFraction = settings.anteFraction;
   return true;
 }
 
@@ -702,6 +709,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     const bigBlind = parseInt(elements.bigBlindSelect.value, 10);
     const startingStack = parseInt(elements.startingStackSelect.value, 10);
     const maxRebuys = parseInt(elements.maxRebuysSelect?.value ?? '3', 10);
+    const anteFraction = Number(elements.anteSelect?.value ?? 0);
     const hostName = getPlayerName();
     const members = [{
       id: network.socket?.id,
@@ -711,6 +719,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     }];
     game.startingStack = startingStack;
     game.maxRebuys = maxRebuys;
+    game.anteFraction = anteFraction;
     game.setOnlinePlayers(members, playerCount, true);
     game.roomId = res.roomId;
     game.inviteLink = res.inviteLink || '';
@@ -721,7 +730,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
       localSocketId: network.socket?.id,
       inviteLink: res.inviteLink,
       members,
-      settings: { playerCount, bigBlind, startingStack, maxRebuys },
+      settings: { playerCount, bigBlind, startingStack, maxRebuys, anteFraction },
       status: 'lobby',
     });
     inOnlineRoom = true;
@@ -919,6 +928,15 @@ elements.bigBlindSelect.addEventListener('change', async (e) => {
     return;
   }
   game.setBigBlind(parseInt(e.target.value, 10));
+});
+
+elements.anteSelect?.addEventListener('change', async (e) => {
+  const anteFraction = Number(e.target.value);
+  if (isOnline() && game.isHost) {
+    await pushTableSettings({ anteFraction });
+    return;
+  }
+  game.setAnteFraction(anteFraction);
 });
 
 elements.maxRebuysSelect?.addEventListener('change', async (e) => {
