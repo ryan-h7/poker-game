@@ -50,8 +50,8 @@
       </div>
       <p class="lobby-hint" id="lobby-hint">Share the link with friends.</p>
       <p id="lobby-table-settings" class="lobby-table-settings"></p>
-      <div class="lobby-code">Room: <strong id="lobby-room-code">—</strong></div>
-      <div class="invite-row">
+      <div class="lobby-code">Table: <strong id="lobby-room-code">—</strong></div>
+      <div id="invite-row" class="invite-row">
         <input type="text" id="invite-link" class="invite-link" readonly inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button id="btn-copy-link" class="btn btn-copy" type="button">Copy Link</button>
         <button id="btn-share-link" class="btn btn-share hidden" type="button">Share</button>
@@ -138,7 +138,7 @@
       </span>
       <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
       <button id="btn-reset-solo" class="btn btn-reset-solo hidden" type="button">Reset Game</button>
-      <button id="btn-play-friends" class="btn btn-friends" type="button">Play with Friends</button>
+      <button id="btn-play-friends" class="btn btn-friends" type="button">Multiplayer</button>
       <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled>Replay Hand</button>
       <label class="setup-option">
         <input type="checkbox" id="show-bot-hands">
@@ -147,13 +147,22 @@
     </div>
 
     <div id="multiplayer-panel" class="multiplayer-panel hidden">
-      <h2 class="multiplayer-title">Play with Friends</h2>
-      <div id="lobby-entry" class="lobby-entry">
+      <h2 class="multiplayer-title">Multiplayer</h2>
+      <section class="public-rooms-section" aria-labelledby="public-rooms-heading">
+        <h3 id="public-rooms-heading" class="public-rooms-heading">Open tables</h3>
+        <p class="public-rooms-sub">Join anytime — up to 8 players per table. Bots fill empty seats.</p>
+        <div id="public-rooms-list" class="public-rooms-list" role="list"></div>
+      </section>
+      <section class="private-room-section" aria-labelledby="private-room-heading">
+        <h3 id="private-room-heading" class="private-room-heading">Private room</h3>
+        <p class="private-room-sub">Create a room or join with a code from a friend.</p>
+        <div id="lobby-entry" class="lobby-entry">
         <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
         <input type="text" id="join-room-code" class="lobby-input lobby-code-input" placeholder="Room code" maxlength="6" autocapitalize="characters" spellcheck="false">
         <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
         <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join Room</button>
-      </div>
+        </div>
+      </section>
     </div>
 
     <aside class="sidebar">

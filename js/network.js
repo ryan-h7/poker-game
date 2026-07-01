@@ -1,9 +1,10 @@
 export class NetworkClient {
-  constructor({ onLobby, onGameState, onError, onKicked }) {
+  constructor({ onLobby, onGameState, onError, onKicked, onPublicRooms }) {
     this.onLobby = onLobby;
     this.onGameState = onGameState;
     this.onError = onError;
     this.onKicked = onKicked;
+    this.onPublicRooms = onPublicRooms;
     this.socket = null;
     this.roomId = null;
     this.inviteLink = null;
@@ -27,6 +28,9 @@ export class NetworkClient {
       });
       this.socket.on('connect_error', () => {
         reject(new Error('Could not connect to game server. Run: npm start'));
+      });
+      this.socket.on('public-rooms', (data) => {
+        if (data?.rooms) this.onPublicRooms?.(data.rooms);
       });
       this.socket.on('lobby-state', (state) => {
         this.roomId = state.roomId;
@@ -117,6 +121,16 @@ export class NetworkClient {
 
   rebuy() {
     return this.emit('rebuy');
+  }
+
+  async fetchPublicRooms() {
+    try {
+      const res = await fetch('/api/public-rooms');
+      const data = await res.json().catch(() => ({}));
+      return data.ok ? data.rooms : [];
+    } catch {
+      return [];
+    }
   }
 
   leaveRoom() {

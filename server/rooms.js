@@ -4,6 +4,24 @@ import { PokerGame } from '../js/game.js';
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_TABLE_SIZE = 8;
 
+export const PUBLIC_ROOM_DEFS = [
+  {
+    id: 'PUB001',
+    name: 'Main Lounge',
+    settings: { playerCount: 6, bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0 },
+  },
+  {
+    id: 'PUB002',
+    name: 'High Roller',
+    settings: { playerCount: 6, bigBlind: 50, startingStack: 5000, maxRebuys: 3, anteFraction: 0 },
+  },
+  {
+    id: 'PUB003',
+    name: 'Quick Fire',
+    settings: { playerCount: 4, bigBlind: 10, startingStack: 500, maxRebuys: 1, anteFraction: 0.5 },
+  },
+];
+
 function makeRoomId() {
   let id = '';
   for (let i = 0; i < 6; i++) {
@@ -16,6 +34,50 @@ export class RoomManager {
   constructor(io) {
     this.io = io;
     this.rooms = new Map();
+  }
+
+  initPublicRooms() {
+    for (const def of PUBLIC_ROOM_DEFS) {
+      if (!this.rooms.has(def.id)) {
+        this.createPublicRoom(def);
+      }
+    }
+  }
+
+  createPublicRoom(def) {
+    const room = new Room(def.id, this.io, (id) => this.removeIfEmpty(id), {
+      isPublic: true,
+      displayName: def.name,
+      onPublicChange: () => this.broadcastPublicRoomsUpdate(),
+    });
+    room.settings = {
+      playerCount: def.settings.playerCount ?? 6,
+      bigBlind: def.settings.bigBlind ?? 20,
+      startingStack: def.settings.startingStack ?? 1000,
+      maxRebuys: def.settings.maxRebuys ?? 3,
+      anteFraction: def.settings.anteFraction ?? 0,
+    };
+    this.rooms.set(def.id, room);
+    return room;
+  }
+
+  listPublicRooms() {
+    return PUBLIC_ROOM_DEFS.map((def) => {
+      const room = this.rooms.get(def.id);
+      return room ? room.publicSummary() : {
+        id: def.id,
+        name: def.name,
+        players: 0,
+        maxPlayers: MAX_TABLE_SIZE,
+        status: 'lobby',
+        inHand: false,
+        bigBlind: def.settings.bigBlind,
+      };
+    });
+  }
+
+  broadcastPublicRoomsUpdate() {
+    this.io.emit('public-rooms', { ok: true, rooms: this.listPublicRooms() });
   }
 
   create(socket, name) {
@@ -32,7 +94,8 @@ export class RoomManager {
 
   removeIfEmpty(roomId) {
     const room = this.get(roomId);
-    if (room && room.membersByToken.size === 0) {
+    if (!room || room.isPublic) return;
+    if (room.membersByToken.size === 0) {
       room.destroy();
       this.rooms.delete(roomId);
     }
@@ -40,8 +103,11 @@ export class RoomManager {
 }
 
 class Room {
-  constructor(id, io, onEmpty) {
+  constructor(id, io, onEmpty, { isPublic = false, displayName = null, onPublicChange = null } = {}) {
     this.id = id;
+    this.isPublic = isPublic;
+    this.displayName = displayName || id;
+    this.onPublicChange = onPublicChange;
     this.hostToken = null;
     this.io = io;
     this.onEmpty = onEmpty;
@@ -96,21 +162,57 @@ class Room {
       if (this.connectedMemberCount() !== 1 || this.isMidHand()) return;
       const member = this.allMembers().find(m => m.socketId);
       if (!member) {
-        this.destroy();
-        this.onEmpty?.(this.id);
+        if (this.isPublic) this.resetWhenEmpty();
+        else {
+          this.destroy();
+          this.onEmpty?.(this.id);
+        }
         return;
       }
       const sock = member.socketId && this.io.sockets.sockets.get(member.socketId);
       if (sock) {
-        sock.emit('kicked', { reason: 'Room closed after inactivity.' });
+        sock.emit('kicked', { reason: 'Removed after inactivity.' });
         sock.leave(this.id);
         delete sock.data.roomId;
         delete sock.data.seatIndex;
         delete sock.data.memberToken;
       }
-      this.destroy();
-      this.onEmpty?.(this.id);
+      this.removeMemberByToken(member.token);
     }, this.soloIdleMs);
+  }
+
+  resetWhenEmpty() {
+    this.clearSoloIdleTimer();
+    for (const member of this.membersByToken.values()) {
+      this.clearMemberTimers(member);
+    }
+    this.membersByToken.clear();
+    this.hostToken = null;
+    if (this.game) {
+      this.game.clearAiTimer();
+      this.game = null;
+    }
+    this.status = 'lobby';
+    this.message = 'Waiting for players…';
+  }
+
+  publicSummary() {
+    const inHand = !!this.isMidHand();
+    let tableStatus = 'waiting';
+    if (inHand) tableStatus = 'in_hand';
+    else if (this.status === 'active') tableStatus = 'between_hands';
+    return {
+      id: this.id,
+      name: this.displayName,
+      players: this.connectedMemberCount(),
+      maxPlayers: MAX_TABLE_SIZE,
+      seated: this.membersByToken.size,
+      status: this.status,
+      tableStatus,
+      inHand,
+      bigBlind: this.settings.bigBlind,
+      startingStack: this.settings.startingStack,
+    };
   }
 
   isMidHand() {
@@ -268,6 +370,12 @@ class Room {
     socket.data.memberToken = token;
     if (isHost || !this.hostToken) this.hostToken = token;
 
+    if (this.isPublic && this.status === 'lobby') {
+      const n = this.membersByToken.size;
+      this.settings.playerCount = Math.max(4, Math.min(MAX_TABLE_SIZE, Math.max(n, 4)));
+      if (n <= 2) this.settings.playerCount = Math.max(this.settings.playerCount, 6);
+    }
+
     this.message = `${displayName} joined the table.`;
     this.clearSoloIdleTimer();
     this.syncTable();
@@ -371,6 +479,11 @@ class Room {
     const wasHost = token === this.hostToken;
     this.membersByToken.delete(token);
     if (this.membersByToken.size === 0) {
+      if (this.isPublic) {
+        this.resetWhenEmpty();
+        this.onPublicChange?.();
+        return;
+      }
       this.destroy();
       this.onEmpty?.(this.id);
       return;
@@ -585,6 +698,7 @@ class Room {
     } else {
       this.broadcastLobby();
     }
+    if (this.isPublic) this.onPublicChange?.();
   }
 
   handleAction(socketId, action, amount = 0) {
@@ -651,6 +765,8 @@ class Room {
     const hostMember = this.allMembers().find(m => m.token === this.hostToken);
     return {
       roomId: this.id,
+      displayName: this.displayName,
+      isPublic: this.isPublic,
       status: this.status,
       isHost: forMember?.token === this.hostToken,
       hostId: hostMember?.socketId ?? null,
@@ -688,5 +804,6 @@ class Room {
       if (socket) state.inviteLink = this.getInviteLink(socket);
       this.io.to(member.socketId).emit('game-state', state);
     }
+    if (this.isPublic) this.onPublicChange?.();
   }
 }

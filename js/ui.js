@@ -217,13 +217,23 @@ export function renderTableDetails(elements, info) {
     lobbyRoomCode, lobbyPlayers, inviteLinkInput, lobbyHint, lobbyTableSettings,
   } = elements;
 
-  if (lobbyRoomCode) lobbyRoomCode.textContent = info.roomId || '—';
+  if (lobbyRoomCode) {
+    lobbyRoomCode.textContent = info.isPublic
+      ? (info.displayName || info.roomId || '—')
+      : (info.roomId || '—');
+  }
   if (inviteLinkInput && info.inviteLink) inviteLinkInput.value = info.inviteLink;
+  const inviteRow = elements.inviteRow;
+  if (inviteRow) inviteRow.classList.toggle('hidden', !!info.isPublic);
   if (lobbyHint) {
     if (info.status === 'lobby') {
       const humans = info.members?.length ?? 0;
       const bots = Math.max(0, (info.settings?.playerCount ?? 0) - humans);
-      if (info.isHost) {
+      if (info.isPublic) {
+        lobbyHint.textContent = info.isHost
+          ? `Open table — deal when ready. ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
+          : 'Open table — waiting for someone to deal.';
+      } else if (info.isHost) {
         lobbyHint.textContent = humans < 2
           ? `Share the link below. Deal when ready — ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
           : 'Share the link below. Deal when everyone has joined.';
@@ -329,6 +339,8 @@ export function buildTableInfo(game) {
       maxRebuys: game.maxRebuys,
       anteFraction: game.anteFraction ?? 0,
     },
+    isPublic: !!game.isPublicRoom,
+    displayName: game.roomDisplayName || game.roomId,
     status: game.roomStatus,
   };
 }

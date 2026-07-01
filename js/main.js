@@ -52,6 +52,7 @@ const elements = {
   displayBBBtn: document.getElementById('display-bb'),
   stopReplayBtn: document.getElementById('btn-stop-replay'),
   multiplayerPanel: document.getElementById('multiplayer-panel'),
+  publicRoomsList: document.getElementById('public-rooms-list'),
   lobbyEntry: document.getElementById('lobby-entry'),
   onlineToolbar: document.getElementById('online-toolbar'),
   rebuyBtn: document.getElementById('btn-rebuy'),
@@ -65,6 +66,7 @@ const elements = {
   copyLinkBtn: document.getElementById('btn-copy-link'),
   shareLinkBtn: document.getElementById('btn-share-link'),
   inviteLinkInput: document.getElementById('invite-link'),
+  inviteRow: document.getElementById('invite-row'),
   lobbyRoomCode: document.getElementById('lobby-room-code'),
   lobbyPlayers: document.getElementById('lobby-players'),
   lobbyHint: document.getElementById('lobby-hint'),
@@ -136,6 +138,90 @@ let authTab = 'login';
 let accountsEnabled = false;
 let passwordResetEnabled = false;
 let pendingResetToken = null;
+let publicRoomsPollTimer = null;
+let cachedPublicRooms = [];
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatPublicRoomStatus(room) {
+  if (room.inHand) return 'Hand in progress';
+  if (room.tableStatus === 'between_hands') return 'Between hands';
+  return 'Waiting for players';
+}
+
+function renderPublicRooms(rooms) {
+  cachedPublicRooms = rooms || [];
+  const el = elements.publicRoomsList;
+  if (!el) return;
+  if (!cachedPublicRooms.length) {
+    el.innerHTML = '<p class="public-rooms-sub">No open tables available right now.</p>';
+    return;
+  }
+  const inRoom = inOnlineRoom && game.onlineMode;
+  el.innerHTML = cachedPublicRooms.map((room) => {
+    const seated = room.seated ?? room.players ?? 0;
+    const full = seated >= room.maxPlayers;
+    const statusClass = room.inHand ? 'in-hand' : '';
+    const disabled = full || inRoom;
+    const label = full ? 'Table full' : (inRoom ? 'Already seated' : 'Join table');
+    return `<div class="public-room-card ${full ? 'is-full' : ''}" role="listitem">
+      <div class="public-room-card-header">
+        <span class="public-room-name">${escapeHtml(room.name)}</span>
+        <span class="public-room-count">${seated}/${room.maxPlayers}</span>
+      </div>
+      <div class="public-room-meta">$${room.bigBlind} BB · $${Number(room.startingStack).toLocaleString()} stacks</div>
+      <div class="public-room-status ${statusClass}">${formatPublicRoomStatus(room)}</div>
+      <button type="button" class="btn-join-public" data-room-id="${escapeHtml(room.id)}" ${disabled ? 'disabled' : ''}>${label}</button>
+    </div>`;
+  }).join('');
+}
+
+async function refreshPublicRooms() {
+  try {
+    if (!network.connected) await network.connect();
+    const rooms = await network.fetchPublicRooms();
+    renderPublicRooms(rooms);
+  } catch {
+    if (!cachedPublicRooms.length) renderPublicRooms([]);
+  }
+}
+
+function startPublicRoomsPolling() {
+  clearInterval(publicRoomsPollTimer);
+  refreshPublicRooms();
+  publicRoomsPollTimer = setInterval(refreshPublicRooms, 5000);
+}
+
+function stopPublicRoomsPolling() {
+  clearInterval(publicRoomsPollTimer);
+  publicRoomsPollTimer = null;
+}
+
+async function joinPublicRoom(roomId) {
+  if (!roomId || (inOnlineRoom && game.onlineMode)) return;
+  const name = getPlayerName();
+  if (!name || name === 'Player') {
+    setMessage(elements.message, 'Enter your name below, then join a table.');
+    elements.playerNameInput?.focus();
+    return;
+  }
+  clearSoloState();
+  game.soloSessionActive = false;
+  try {
+    await network.joinRoom(roomId, name);
+    stopPublicRoomsPolling();
+    game.lobbyPanelOpen = false;
+    elements.multiplayerPanel?.classList.add('hidden');
+  } catch (err) {
+    setMessage(elements.message, err.message || 'Could not join table.');
+    refreshPublicRooms();
+  }
+}
 
 function setModalMessage(el, message, isSuccess = false) {
   if (!el) return;
@@ -484,6 +570,7 @@ game.setShowBotHandsAtEnd(showBotHandsAtEnd);
 game.setShowInBB(showInBB);
 
 const network = new NetworkClient({
+  onPublicRooms: (rooms) => renderPublicRooms(rooms),
   onLobby: (lobby) => {
     inOnlineRoom = true;
     game.onlineMode = true;
@@ -501,6 +588,8 @@ const network = new NetworkClient({
     game.startingStack = lobby.settings.startingStack ?? 1000;
     game.maxRebuys = lobby.settings.maxRebuys ?? 3;
     game.anteFraction = lobby.settings.anteFraction ?? 0;
+    game.isPublicRoom = !!lobby.isPublic;
+    game.roomDisplayName = lobby.displayName || lobby.roomId;
     game.roomId = lobby.roomId;
     game.inviteLink = lobby.inviteLink || game.inviteLink;
     game.setOnlinePlayers(lobby.members, lobby.settings.playerCount, true);
@@ -512,17 +601,25 @@ const network = new NetworkClient({
       inviteLink: lobby.inviteLink,
       members: lobby.members,
       settings: lobby.settings,
+      isPublic: !!lobby.isPublic,
+      displayName: lobby.displayName || lobby.roomId,
       status: lobby.status,
     });
     if (lobby.message) {
       setMessage(elements.message, lobby.message);
     } else if (game.roomStatus === 'lobby') {
       const humans = lobby.members?.length ?? 0;
-      setMessage(elements.message, lobby.isHost
-        ? (humans < 2
-          ? 'Share the invite link. Deal when ready — bots fill empty seats.'
-          : 'Share the invite link. Deal when everyone has joined.')
-        : 'You\'re in the lobby — waiting for the host to deal.');
+      if (lobby.isPublic) {
+        setMessage(elements.message, lobby.isHost
+          ? 'You\'re at the table — deal when ready. Bots fill empty seats.'
+          : 'You\'re at the table — waiting for someone to deal.');
+      } else {
+        setMessage(elements.message, lobby.isHost
+          ? (humans < 2
+            ? 'Share the invite link. Deal when ready — bots fill empty seats.'
+            : 'Share the invite link. Deal when everyone has joined.')
+          : 'You\'re in the lobby — waiting for the host to deal.');
+      }
     }
     renderGame(game, elements);
   },
@@ -545,6 +642,8 @@ const network = new NetworkClient({
     inOnlineRoom = false;
     game.onlineMode = false;
     game.isHost = false;
+    game.isPublicRoom = false;
+    game.roomDisplayName = '';
     game.lobbyPanelOpen = false;
     game.roomStatus = 'lobby';
     game.tableDetailsOpen = false;
@@ -631,6 +730,7 @@ async function joinRoom(roomId, fromModal = false) {
   if (fromModal) setJoinModalError(elements, '');
   try {
     await network.joinRoom(code, getPlayerName(fromModal));
+    stopPublicRoomsPolling();
     pendingInviteRoomId = null;
     if (elements.joinRoomCodeInput) elements.joinRoomCodeInput.value = code;
   } catch (err) {
@@ -695,9 +795,16 @@ elements.resetSoloBtn?.addEventListener('click', () => {
 elements.playFriendsBtn?.addEventListener('click', () => {
   game.lobbyPanelOpen = true;
   showMultiplayerEntry(elements);
-  setMessage(elements.message, 'Enter your name, then create or join a room.');
+  startPublicRoomsPolling();
+  setMessage(elements.message, 'Pick an open table or create a private room with friends.');
   elements.multiplayerPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   renderGame(game, elements);
+});
+
+elements.publicRoomsList?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-join-public');
+  if (!btn || btn.disabled) return;
+  joinPublicRoom(btn.dataset.roomId);
 });
 
 elements.createRoomBtn.addEventListener('click', async () => {
@@ -736,8 +843,11 @@ elements.createRoomBtn.addEventListener('click', async () => {
     inOnlineRoom = true;
     game.onlineMode = true;
     game.isHost = true;
+    game.isPublicRoom = false;
+    game.roomDisplayName = '';
     game.roomStatus = 'lobby';
     game.lobbyPanelOpen = false;
+    stopPublicRoomsPolling();
     game.localSeatIndex = 0;
     game.tableDetailsOpen = true;
     const copyResult = await copyInviteLink(res.inviteLink || '');
@@ -855,12 +965,15 @@ function leaveOnlineRoom() {
   inOnlineRoom = false;
   game.onlineMode = false;
   game.isHost = false;
+  game.isPublicRoom = false;
+  game.roomDisplayName = '';
   game.lobbyPanelOpen = false;
   game.roomStatus = 'lobby';
   game.tableDetailsOpen = false;
   game.inviteLink = '';
   game.phase = 'idle';
   game.resetPlayers();
+  stopPublicRoomsPolling();
   hideMultiplayerPanel(elements);
   hideJoinModal(elements);
   clearRoomFromUrl();

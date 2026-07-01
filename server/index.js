@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { RoomManager } from './rooms.js';
+import { RoomManager, PUBLIC_ROOM_DEFS } from './rooms.js';
 import { initDb, isDbEnabled } from './db.js';
 import apiRouter from './api.js';
 
@@ -17,13 +17,22 @@ const io = new Server(httpServer, {
   cors: { origin: '*' },
 });
 
+const rooms = new RoomManager(io);
+
 app.use(express.json({ limit: '512kb' }));
+app.get('/api/public-rooms', (_, res) => {
+  res.json({ ok: true, rooms: rooms.listPublicRooms() });
+});
 app.use('/api', apiRouter);
 app.use(express.static(rootDir));
 
-const rooms = new RoomManager(io);
-
 io.on('connection', (socket) => {
+  socket.emit('public-rooms', { ok: true, rooms: rooms.listPublicRooms() });
+
+  socket.on('list-public-rooms', (cb) => {
+    cb?.({ ok: true, rooms: rooms.listPublicRooms() });
+  });
+
   socket.on('create-room', ({ name, settings }, cb) => {
     const room = rooms.create(socket, name);
     if (settings) room.updateSettings(socket.id, settings);
@@ -120,6 +129,7 @@ io.on('connection', (socket) => {
     socket.leave(roomId);
     delete socket.data.roomId;
     rooms.removeIfEmpty(roomId);
+    rooms.broadcastPublicRoomsUpdate();
   });
 
   socket.on('disconnect', () => {
@@ -153,9 +163,11 @@ async function start() {
     console.log('DATABASE_URL not set — running without accounts (sessionStorage solo saves only).');
   }
 
+  rooms.initPublicRooms();
+
   httpServer.listen(PORT, () => {
     console.log(`Poker server running at http://localhost:${PORT}`);
-    console.log('Create a room in the browser and share the invite link with friends.');
+    console.log('Open tables:', PUBLIC_ROOM_DEFS.map((r) => r.name).join(', '));
   });
 }
 

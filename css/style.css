@@ -690,7 +690,105 @@ header h1 {
 .multiplayer-title {
   font-size: 1rem;
   color: var(--gold);
+  margin: 0 0 1rem;
+}
+
+.public-rooms-section {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #30363d;
+}
+
+.public-rooms-heading,
+.private-room-heading {
+  font-size: 0.9rem;
+  color: var(--text);
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+
+.public-rooms-sub,
+.private-room-sub {
+  font-size: 0.8rem;
+  color: var(--muted);
   margin: 0 0 0.75rem;
+}
+
+.public-rooms-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.65rem;
+}
+
+.public-room-card {
+  background: var(--bg);
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.public-room-card.is-full {
+  opacity: 0.72;
+}
+
+.public-room-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.public-room-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--gold);
+}
+
+.public-room-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.public-room-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.public-room-status {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.public-room-status.in-hand {
+  color: #f0a04b;
+}
+
+.btn-join-public {
+  margin-top: 0.15rem;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--gold);
+  color: var(--black);
+  font-weight: 600;
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.btn-join-public:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.private-room-section {
+  margin-top: 0.25rem;
 }
 
 .multiplayer-header {
