@@ -1,7 +1,7 @@
 import {
   classifyHand, boardTexture, analyzeBlockers, boardScareFactor,
 } from './engine.js';
-import { getOpponentRead, getPrimaryVillain, getLimpedPotRead, getPreflopSizeMult } from './opponent.js';
+import { getOpponentRead, getPrimaryVillain, getLimpedPotRead, getPreflopSizeMult, applyHudToStrength, hudBluffMult } from './opponent.js';
 
 export function getPositionTier(playerIndex, dealerIndex, totalPlayers) {
   const afterBtn = (playerIndex - dealerIndex + totalPlayers) % totalPlayers;
@@ -187,6 +187,59 @@ function coldCallTightness(pressure) {
   return 0.42;
 }
 
+/** Pot odds, implied-odds slack, and equity estimate for call/fold decisions. */
+function getPotOddsContext(game, player, {
+  hand, stackCtx, facing, isPreflop, potCtx, effectiveStrength,
+}) {
+  const toCall = game.currentBet - player.bet;
+  const potAfterCall = Math.max(game.pot + toCall, game.bigBlind);
+  const potOdds = toCall > 0 ? toCall / potAfterCall : 0;
+  const requiredEquity = potOdds;
+
+  let impliedBonus = 0;
+  if (hand?.category === 'draw') {
+    impliedBonus = 0.06 + (hand.draws?.drawStrength ?? 0) * 0.14;
+    if (stackCtx.isDeep) impliedBonus += 0.05;
+    if (stackCtx.highSpr) impliedBonus += 0.03;
+  } else if (hand?.category === 'speculative') {
+    impliedBonus = isPreflop ? 0.05 : 0.07;
+    if (stackCtx.isDeep) impliedBonus += 0.04;
+    if (potCtx?.isHeadsUp) impliedBonus += 0.02;
+  } else if (hand?.category === 'marginal') {
+    impliedBonus = 0.02;
+    if (isPreflop && facing?.facing3BetPlus) impliedBonus += 0.03;
+  }
+
+  if (facing?.sizeCategory === 'small') impliedBonus += 0.02;
+  if (facing?.sizeCategory === 'medium' && isPreflop) impliedBonus += 0.01;
+  if (potCtx?.isMultiway && !isPreflop) impliedBonus -= 0.04;
+  if (potCtx?.isHeadsUp && !isPreflop) impliedBonus += 0.02;
+
+  const equityEstimate = effectiveStrength ?? hand?.strength ?? 0.4;
+  const callableEquity = Math.max(0, requiredEquity - impliedBonus);
+  const hasPrice = equityEstimate >= callableEquity - 0.03;
+  const hasGreatPrice = equityEstimate >= callableEquity + 0.05;
+
+  return {
+    toCall,
+    potAfterCall,
+    potOdds,
+    requiredEquity,
+    impliedBonus,
+    callableEquity,
+    equityEstimate,
+    hasPrice,
+    hasGreatPrice,
+  };
+}
+
+function callIfPricedIn(priceCtx, stackCtx, facing, player, baseStackFrac = 0.22) {
+  if (!priceCtx.hasPrice || priceCtx.toCall <= 0) return false;
+  if (priceCtx.toCall > player.chips) return false;
+  const frac = priceCtx.hasGreatPrice ? baseStackFrac * 1.15 : baseStackFrac;
+  return withinStackCallCap(priceCtx.toCall, player, frac, facing, stackCtx);
+}
+
 /** ±spread random multiplier for sizing (e.g. 0.92–1.08 at spread 0.08). */
 function sizeJitter(spread = 0.1) {
   return 1 - spread + Math.random() * spread * 2;
@@ -253,13 +306,25 @@ export function getFacingBetAnalysis(game, player) {
   const isPreflop = game.community.length === 0;
   const betPotRatio = toCall / pot;
   const openBB = game.currentBet / bb;
+  const incrementBB = toCall / bb;
+  const heroInvested = player.bet > bb * 1.05;
+  const facing3BetPlus = openBB > 4.5 || (heroInvested && game.currentBet > player.bet * 1.6);
 
   let sizeCategory;
   if (isPreflop) {
-    if (openBB <= 2.5) sizeCategory = 'small';
-    else if (openBB <= 4) sizeCategory = 'medium';
-    else if (openBB <= 8) sizeCategory = 'large';
-    else sizeCategory = 'overbet';
+    // Opens use total bet size; 3-bets+ use increment over what hero already put in.
+    const sizingBB = heroInvested ? incrementBB : openBB;
+    if (facing3BetPlus) {
+      if (sizingBB <= 5.5) sizeCategory = 'small';
+      else if (sizingBB <= 8.5) sizeCategory = 'medium';
+      else if (sizingBB <= 12) sizeCategory = 'large';
+      else sizeCategory = 'overbet';
+    } else {
+      if (openBB <= 2.5) sizeCategory = 'small';
+      else if (openBB <= 4) sizeCategory = 'medium';
+      else if (openBB <= 6) sizeCategory = 'large';
+      else sizeCategory = 'overbet';
+    }
   } else {
     if (betPotRatio < 0.35) sizeCategory = 'small';
     else if (betPotRatio < 0.65) sizeCategory = 'medium';
@@ -271,21 +336,41 @@ export function getFacingBetAnalysis(game, player) {
   const commitRatio = heroTotal > 0 ? toCall / heroTotal : 0;
   const ranks = ['small', 'medium', 'large', 'overbet'];
   let rankIdx = ranks.indexOf(sizeCategory);
-  if (commitRatio >= 0.35 && rankIdx < 3) rankIdx += 1;
-  if (commitRatio >= 0.55 && rankIdx < 3) rankIdx = Math.max(rankIdx, 2);
-  if (commitRatio >= 0.8 || toCall >= player.chips) rankIdx = 3;
+  // Don't inflate 3-bet size category from stack commitment alone preflop.
+  if (!isPreflop || !facing3BetPlus) {
+    if (commitRatio >= 0.35 && rankIdx < 3) rankIdx += 1;
+    if (commitRatio >= 0.55 && rankIdx < 3) rankIdx = Math.max(rankIdx, 2);
+    if (commitRatio >= 0.8 || toCall >= player.chips) rankIdx = 3;
+  } else if (commitRatio >= 0.8 || toCall >= player.chips) {
+    rankIdx = 3;
+  }
   sizeCategory = ranks[rankIdx];
 
   const base = { ...SIZE_REACTION[sizeCategory] };
   let reraiseExtra = base.reraiseExtra;
   if (isPreflop) {
-    if (openBB >= 8) reraiseExtra += 0.12;
-    if (openBB >= 15) reraiseExtra += 0.15;
+    if (facing3BetPlus) {
+      if (openBB >= 16) reraiseExtra += 0.1;
+      if (openBB >= 24) reraiseExtra += 0.12;
+    } else {
+      if (openBB >= 8) reraiseExtra += 0.12;
+      if (openBB >= 15) reraiseExtra += 0.15;
+    }
   } else if (sizeCategory === 'overbet' && betPotRatio > 1.5) {
     reraiseExtra += 0.1;
   }
 
-  return { facing: true, sizeCategory, betPotRatio, openBB, toCall, ...base, reraiseExtra };
+  return {
+    facing: true,
+    sizeCategory,
+    betPotRatio,
+    openBB,
+    incrementBB,
+    facing3BetPlus,
+    toCall,
+    ...base,
+    reraiseExtra,
+  };
 }
 
 /** Spots where pre-flop aggressor leads with a bet (c-bet / barrel). */
@@ -332,7 +417,7 @@ function trapCautionMult(trapLine) {
   return Math.max(0.4, 1 - trapLine.trapRisk * 0.65);
 }
 
-function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, stackCtx) {
+function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, stackCtx, oppRead) {
   const toCall = game.currentBet - player.bet;
   if (toCall > 0) return null;
 
@@ -341,6 +426,14 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, s
   const trapLine = getOpponentTrapLine(game, heroIndex);
   const trapMult = trapCautionMult(trapLine);
   const depthMult = stackCtx.sizingMult * (stackCtx.isShort ? 0.85 : 1);
+  let cbetFreqMult = 1;
+  if (oppRead?.foldsToCbet) cbetFreqMult *= 1.22;
+  if (oppRead?.foldToCbetPct !== null && oppRead.foldToCbetPct > 0.62) cbetFreqMult *= 1.15;
+  if (oppRead?.isCallingStation) cbetFreqMult *= 0.72;
+  const bluffMult = stackCtx.bluffMult * hudBluffMult(oppRead);
+  let riverBluffMult = 1;
+  if (oppRead?.wtsdPct !== null && oppRead.wtsdPct > 34) riverBluffMult *= 0.5;
+  if (oppRead?.isNit) riverBluffMult *= 1.2;
 
   const betForStreet = (street) => {
     const frac = street === 'flop'
@@ -361,7 +454,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, s
   // ── Flop c-bet ──
   if (barrelCtx.isCbetSpot) {
     const baseFreq = CBET_FREQ[barrelCtx.texture] ?? 0.5;
-    const freq = baseFreq * (0.75 + aggression * 0.35) * mw;
+    const freq = baseFreq * (0.75 + aggression * 0.35) * mw * cbetFreqMult;
 
     if (hand.category === 'premium') {
       const amt = betForStreet('flop');
@@ -381,7 +474,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, s
       const amt = betForStreet('flop');
       if (amt > 0) return makeBet(amt, { isCbet: true, isSemiBluff: true });
     }
-    if (hand.category === 'air' && Math.random() < freq * 0.55 * stackCtx.bluffMult) {
+    if (hand.category === 'air' && Math.random() < freq * 0.55 * bluffMult) {
       const amt = betForStreet('flop');
       if (amt > 0) return makeBet(amt, { isCbet: true, isBluff: true });
     }
@@ -411,7 +504,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, s
       const amt = betForStreet('turn');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 2, isSemiBluff: true });
     }
-    if (hand.category === 'air' && Math.random() < barrelFreq * 0.35 * stackCtx.bluffMult) {
+    if (hand.category === 'air' && Math.random() < barrelFreq * 0.35 * bluffMult) {
       const amt = betForStreet('turn');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 2, isBluff: true });
     }
@@ -427,7 +520,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, s
       const amt = betForStreet('river');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 3 });
     }
-    if (hand.category === 'air' && Math.random() < tripleFreq * stackCtx.bluffMult) {
+    if (hand.category === 'air' && Math.random() < tripleFreq * bluffMult * riverBluffMult) {
       const amt = betForStreet('river');
       if (amt > 0) return makeBet(amt, { isBarrel: true, barrelStreet: 3, isBluff: true });
     }
@@ -476,7 +569,11 @@ function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCt
       if (Math.random() < lineScore.trapRisk * 0.55) return { action: 'fold' };
     }
     const tier = pairTier(hand);
-    const floatBonus = oppRead.callThresholdBonus;
+    let floatBonus = oppRead.callThresholdBonus;
+    if (oppRead.isCallingStation) floatBonus += 0.06;
+    if (oppRead.wtsdPct !== null && oppRead.wtsdPct > 36 && facing.sizeCategory !== 'small') {
+      if (!isStrongPair(hand)) return { action: 'fold' };
+    }
     if (isCbet && facing.sizeCategory === 'small' && !potCtx.isMultiway) {
       if (isWeakPair(hand) && !oppRead.isStabBluffer && Math.random() > 0.35) return { action: 'fold' };
       return { action: 'call' };
@@ -972,6 +1069,9 @@ export function estimateVillainRangeStrength(game, playerIndex, { facing, barrel
     if (oppRead.isStabHappy && facing.facing && facing.sizeCategory === 'small') strength -= 0.05;
     if (lineScore.capped && oppRead.isStabHappy && villainLed) strength -= 0.04;
     if (lineScore.slowplay && oppRead.tightness > 0.52) strength += 0.05;
+    if (oppRead.isNit && villainLed) strength += 0.05;
+    if (oppRead.isCallingStation && villainLed) strength -= 0.07;
+    if (oppRead.pfrPct !== null && oppRead.pfrPct >= 20 && villainLed) strength += 0.04;
   }
 
   return Math.max(0.14, Math.min(0.88, strength));
@@ -980,7 +1080,6 @@ export function estimateVillainRangeStrength(game, playerIndex, { facing, barrel
 export function decideAction(player, game) {
   const toCall = game.currentBet - player.bet;
   const canCheck = toCall === 0;
-  const potOdds = toCall > 0 ? toCall / (game.pot + toCall) : 0;
   const isPreflop = game.community.length === 0;
   const facing = getFacingBetAnalysis(game, player);
 
@@ -1024,7 +1123,9 @@ export function decideAction(player, game) {
       );
       if (checkRaise) return checkRaise;
     } else {
-      const barrelAction = decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, stackCtx);
+      const barrelAction = decideCbetOrBarrel(
+        player, game, hand, aggression, barrelCtx, potCtx, stackCtx, oppRead,
+      );
       if (barrelAction) return barrelAction;
 
       const overbet = decideOverbetLine(
@@ -1053,9 +1154,14 @@ export function decideAction(player, game) {
     if (stackCtx.isShallow && !isPreflop) effectiveStrength -= 0.03;
     if (stackCtx.isDeep && isPreflop) effectiveStrength += 0.02;
   }
+  effectiveStrength = applyHudToStrength(effectiveStrength, oppRead, { isPreflop, facing, canCheck });
+
+  const priceCtx = getPotOddsContext(game, player, {
+    hand, stackCtx, facing, isPreflop, potCtx, effectiveStrength,
+  });
 
   const bluffRoll = Math.random() < 0.14 * aggression * pos.bluffMult * potCtx.multiwayScalar
-    * stackCtx.bluffMult
+    * stackCtx.bluffMult * hudBluffMult(oppRead)
     * (facing.sizeCategory === 'overbet' ? 0.25 : facing.sizeCategory === 'large' ? 0.5 : 1);
 
   const raiseSize = () => {
@@ -1116,6 +1222,9 @@ export function decideAction(player, game) {
       if (!canCheck) return { action: 'call' };
       return { action: 'check' };
     }
+    if (!canCheck && isPreflop && facing.facing3BetPlus && callIfPricedIn(priceCtx, stackCtx, facing, player, 0.28)) {
+      return { action: 'call' };
+    }
   }
 
   if (hand.category === 'draw') {
@@ -1132,24 +1241,33 @@ export function decideAction(player, game) {
 
     if (!canCheck) {
       const cold = coldCallTightness(potCtx.coldCallPressure);
-      const drawPotOdds = (0.28 + drawPower * 0.25 - (facing.sizeCategory === 'small' ? 0.06 : 0)) * cold;
-      const stackCap = (0.28 + drawPower * 0.2) * cold * stackCtx.speculativeMult;
-      if (potOdds <= drawPotOdds && withinStackCallCap(toCall, player, stackCap, facing, stackCtx)) {
+      const drawNeed = priceCtx.callableEquity - (facing.sizeCategory === 'small' ? 0.04 : 0);
+      if (priceCtx.equityEstimate >= drawNeed * cold
+          && callIfPricedIn(priceCtx, stackCtx, facing, player, 0.18 + drawPower * 0.12)) {
         return { action: 'call' };
       }
       if (facing.sizeCategory === 'overbet') return { action: 'fold' };
-      if (facing.sizeCategory === 'large' && drawPower < 0.5) return { action: 'fold' };
-      if (withinStackCallCap(toCall, player, 0.15, facing, stackCtx)) return { action: 'call' };
+      if (facing.sizeCategory === 'large' && drawPower < 0.5 && !priceCtx.hasPrice) return { action: 'fold' };
+      if (priceCtx.hasGreatPrice && withinStackCallCap(toCall, player, 0.12, facing, stackCtx)) {
+        return { action: 'call' };
+      }
       return { action: 'fold' };
     }
     return { action: 'check' };
   }
 
   if (facing.facing && (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet')) {
-    const continueThreshold = 0.55 + facing.reraiseExtra + (posTier === 'early' ? 0.08 : 0);
+    const continueThreshold = (isPreflop && facing.facing3BetPlus ? 0.48 : 0.55)
+      + facing.reraiseExtra + (posTier === 'early' ? 0.08 : 0);
     if (effectiveStrength < continueThreshold) {
-      if (hand.category === 'marginal' && potOdds < 0.2 && facing.sizeCategory !== 'overbet') {
-        if (!isWeakPair(hand) || potOdds < 0.14) return { action: 'call' };
+      if (callIfPricedIn(priceCtx, stackCtx, facing, player, 0.2)) {
+        return { action: 'call' };
+      }
+      if (hand.category === 'marginal' && priceCtx.hasPrice && facing.sizeCategory !== 'overbet') {
+        if (!isWeakPair(hand) || priceCtx.hasGreatPrice) return { action: 'call' };
+      }
+      if (isPreflop && facing.facing3BetPlus && hand.category === 'speculative' && priceCtx.hasPrice) {
+        return { action: 'call' };
       }
       return { action: 'fold' };
     }
@@ -1182,10 +1300,13 @@ export function decideAction(player, game) {
       if (limpRead?.isLimpHappy && facing.openBB <= 2.5 && facing.sizeCategory === 'small') {
         return { action: 'fold' };
       }
+      if (stackCtx.isShort && hand.strength < 0.42 && !priceCtx.hasGreatPrice) return { action: 'fold' };
+      if (potCtx.coldCallPressure >= 2 && posTier !== 'btn' && !priceCtx.hasPrice) return { action: 'fold' };
+      if (callIfPricedIn(priceCtx, stackCtx, facing, player, 0.14 * cold * stackCtx.speculativeMult)) {
+        return { action: 'call' };
+      }
       let maxBB = (posTier === 'late' || posTier === 'btn') ? 2.5 : 1.5;
       maxBB *= cold * stackCtx.speculativeMult;
-      if (stackCtx.isShort && hand.strength < 0.42) return { action: 'fold' };
-      if (potCtx.coldCallPressure >= 2 && posTier !== 'btn') return { action: 'fold' };
       if (toCall <= game.bigBlind * maxBB && (posTier === 'late' || posTier === 'btn' || cold >= 0.7)) {
         return { action: 'call' };
       }
@@ -1221,21 +1342,24 @@ export function decideAction(player, game) {
     }
     const callLimitAdj = oppRead.isStabBluffer ? 0.04 : 0;
     const callFrac = (callLimit + callLimitAdj) * stackCtx.callCapMult;
-    if (potOdds < 0.3 * cold && withinStackCallCap(toCall, player, callFrac, facing, stackCtx)) {
+    if (callIfPricedIn(priceCtx, stackCtx, facing, player, callFrac)) {
       return { action: 'call' };
     }
     if (stackCtx.lowSpr && (isStrongPair(hand) || tier === 'top' || tier === 'overpair')) {
       return { action: 'call' };
     }
+    if (priceCtx.hasGreatPrice && facing.sizeCategory !== 'overbet' && !isWeakPair(hand)) {
+      return { action: 'call' };
+    }
     if (toCall <= game.bigBlind * 2 * cold * stackCtx.speculativeMult
-        && facing.sizeCategory !== 'overbet' && !isWeakPair(hand)) {
+        && facing.sizeCategory !== 'overbet' && !isWeakPair(hand) && priceCtx.hasPrice) {
       return { action: 'call' };
     }
     return { action: 'fold' };
   }
 
   if (canCheck) return { action: 'check' };
-  if (withinStackCallCap(toCall, player, 0.2, facing, stackCtx)) return { action: 'call' };
+  if (callIfPricedIn(priceCtx, stackCtx, facing, player, 0.18)) return { action: 'call' };
   return { action: 'fold' };
 }
 

@@ -8,6 +8,8 @@ import {
   updateStabShowdownReads,
   finalizeHandReads,
   resetOpponentProfiles,
+  markPlayersSawFlop,
+  markShowdownPlayers,
 } from './opponent.js';
 
 const STARTING_CHIPS = 1000;
@@ -84,6 +86,7 @@ export class PokerGame {
     this.tableDetailsOpen = false;
     this.localSocketId = null;
     this.opponentProfiles = null;
+    this.lastHandWinnerIndices = [];
     this.soloSessionActive = false;
   }
 
@@ -869,6 +872,7 @@ export class PokerGame {
     this.humanFoldedPreflop = false;
     this.fastForward = false;
     this.handsRevealed = false;
+    this.lastHandWinnerIndices = [];
     this.clearAiTimer();
     this.currentHandEvents = [];
     this.handSnapshot = null;
@@ -1249,6 +1253,7 @@ export class PokerGame {
       this.community.push(this.deck.pop(), this.deck.pop(), this.deck.pop());
       this.phase = 'flop';
       this.handHistory.push('--- Flop ---');
+      markPlayersSawFlop(this);
     } else if (this.phase === 'flop') {
       this.community.push(this.deck.pop());
       this.phase = 'turn';
@@ -1309,6 +1314,8 @@ export class PokerGame {
     this.onMessage(endMessage);
 
     this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
+    markShowdownPlayers(this);
+    this.lastHandWinnerIndices = winners.map((w) => this.players.indexOf(w.player));
     updateStabShowdownReads(this);
     this.logRevealedHands();
     finalizeHandReads(this);

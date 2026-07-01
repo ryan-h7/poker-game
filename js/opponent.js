@@ -3,6 +3,12 @@ import { classifyHand, evaluateHand } from './engine.js';
 export function createOpponentProfile() {
   return {
     hands: 0,
+    vpipHands: 0,
+    sawFlopHands: 0,
+    showdowns: 0,
+    showdownWins: 0,
+    facedCbets: 0,
+    foldsToCbet: 0,
     stabOpps: 0,
     stabs: 0,
     stabShowdowns: 0,
@@ -44,6 +50,14 @@ const DEFAULT_READ = {
   tightness: 0.5,
   isTight: false,
   isLoose: false,
+  vpipPct: null,
+  pfrPct: null,
+  wtsdPct: null,
+  wsdPct: null,
+  foldToCbetPct: null,
+  isCallingStation: false,
+  isNit: false,
+  foldsToCbet: false,
 };
 
 export function ensureOpponentProfiles(game) {
@@ -52,6 +66,14 @@ export function ensureOpponentProfiles(game) {
   }
   while (game.opponentProfiles.length < game.players.length) {
     game.opponentProfiles.push(createOpponentProfile());
+  }
+  for (const profile of game.opponentProfiles) {
+    profile.vpipHands ??= 0;
+    profile.sawFlopHands ??= 0;
+    profile.showdowns ??= 0;
+    profile.showdownWins ??= 0;
+    profile.facedCbets ??= 0;
+    profile.foldsToCbet ??= 0;
   }
 }
 
@@ -67,6 +89,10 @@ export function initHandReadState(game) {
       checkedThisStreet: false,
       stabbedThisHand: false,
       stabStreets: [],
+      vpipCounted: false,
+      sawFlop: false,
+      atShowdown: false,
+      facedCbetThisHand: false,
     })),
   };
 }
@@ -87,6 +113,24 @@ export function onHandReadNewStreet(game) {
  * @param {boolean} ctx.isCbet
  * @param {boolean} ctx.countCbetOpp
  */
+export function markPlayersSawFlop(game) {
+  const hs = game.handReadState;
+  if (!hs) return;
+  for (let i = 0; i < game.players.length; i++) {
+    const p = game.players[i];
+    if (p.inHand && !p.folded) hs.perPlayer[i].sawFlop = true;
+  }
+}
+
+export function markShowdownPlayers(game) {
+  const hs = game.handReadState;
+  if (!hs) return;
+  for (let i = 0; i < game.players.length; i++) {
+    const p = game.players[i];
+    if (p.inHand && !p.folded) hs.perPlayer[i].atShowdown = true;
+  }
+}
+
 export function observeAction(game, playerIndex, action, ctx) {
   if (game.replaying) return;
   ensureOpponentProfiles(game);
@@ -101,6 +145,24 @@ export function observeAction(game, playerIndex, action, ctx) {
   if (ctx.isLimp) profile.limps += 1;
   if (ctx.countPfrOpp) profile.pfrOpps += 1;
   if (ctx.countPfrOpp && (action === 'raise' || action === 'allin')) profile.pfrRaises += 1;
+
+  const isPreflopStreet = game.phase === 'preflop' && game.community.length === 0;
+  if (isPreflopStreet && !street.vpipCounted) {
+    const voluntary = action === 'raise' || action === 'allin'
+      || (action === 'call' && (ctx.isLimp || ctx.toCall > 0));
+    if (voluntary) {
+      profile.vpipHands += 1;
+      street.vpipCounted = true;
+    }
+  }
+
+  if (ctx.facingCbet && (action === 'fold' || action === 'call' || action === 'raise' || action === 'allin')) {
+    if (!street.facedCbetThisHand) {
+      profile.facedCbets += 1;
+      street.facedCbetThisHand = true;
+    }
+    if (action === 'fold') profile.foldsToCbet += 1;
+  }
 
   if (game.phase === 'preflop') {
     if (action === 'raise' || action === 'allin') profile.preflopRaises += 1;
@@ -164,10 +226,20 @@ export function updateStabShowdownReads(game) {
 export function finalizeHandReads(game) {
   if (game.replaying) return;
   ensureOpponentProfiles(game);
-  for (const profile of game.opponentProfiles) {
+  const hs = game.handReadState;
+  const winners = new Set(game.lastHandWinnerIndices || []);
+  for (let i = 0; i < game.opponentProfiles.length; i++) {
+    const profile = game.opponentProfiles[i];
+    const street = hs?.perPlayer[i];
     profile.hands += 1;
+    if (street?.sawFlop) profile.sawFlopHands += 1;
+    if (street?.atShowdown) {
+      profile.showdowns += 1;
+      if (winners.has(i)) profile.showdownWins += 1;
+    }
   }
   game.handReadState = null;
+  game.lastHandWinnerIndices = [];
 }
 
 /** 0 = very loose, 1 = very tight (session sample). */
@@ -175,7 +247,9 @@ export function computeTightness(profile) {
   if (!profile || profile.hands < 2) return 0.5;
 
   const hands = profile.hands;
-  const vpip = (profile.preflopRaises + profile.limps + profile.preflopCalls) / hands;
+  const vpip = profile.vpipHands > 0
+    ? profile.vpipHands / hands
+    : (profile.preflopRaises + profile.limps + profile.preflopCalls) / hands;
   const pfr = profile.pfrOpps >= 3
     ? profile.pfrRaises / profile.pfrOpps
     : profile.preflopRaises / hands;
@@ -198,6 +272,65 @@ export function getPreflopSizeMult(game, playerIndex, aggression, tableTightness
   mult += (tableTightness - 0.5) * 0.24;
 
   return Math.max(0.84, Math.min(1.2, mult));
+}
+
+function pct(n, d) {
+  if (d < 1) return null;
+  return Math.round((n / d) * 100);
+}
+
+export function computeHudStats(profile) {
+  if (!profile || profile.hands < 2) return null;
+  const vpipPct = pct(profile.vpipHands, profile.hands);
+  const pfrPct = profile.pfrOpps >= 3
+    ? pct(profile.pfrRaises, profile.pfrOpps)
+    : pct(profile.preflopRaises, profile.hands);
+  const wtsdPct = profile.sawFlopHands >= 3
+    ? pct(profile.showdowns, profile.sawFlopHands)
+    : null;
+  const wsdPct = profile.showdowns >= 2
+    ? pct(profile.showdownWins, profile.showdowns)
+    : null;
+  const foldToCbetPct = profile.facedCbets >= 2
+    ? profile.foldsToCbet / profile.facedCbets
+    : null;
+  return { vpipPct, pfrPct, wtsdPct, wsdPct, foldToCbetPct };
+}
+
+/** Adjust hand-strength threshold from session HUD stats. */
+export function applyHudToStrength(strength, oppRead, { isPreflop, facing, canCheck } = {}) {
+  if (!oppRead || oppRead.sampleSize < 4) return strength;
+  let s = strength;
+
+  if (isPreflop) {
+    if (facing?.facing) {
+      if (oppRead.isNit || (oppRead.pfrPct !== null && oppRead.pfrPct >= 18)) s -= 0.04;
+      if (oppRead.isCallingStation) s += 0.05;
+      if (oppRead.isLoose && oppRead.pfrPct !== null && oppRead.pfrPct < 12) s += 0.03;
+      if (facing.facing3BetPlus && facing.sizeCategory === 'small') s += 0.03;
+    } else if (canCheck) {
+      if (oppRead.isTight) s += 0.04;
+      if (oppRead.vpipPct !== null && oppRead.vpipPct > 42) s -= 0.03;
+    }
+  } else {
+    if (oppRead.isCallingStation) s += 0.04;
+    if (oppRead.wtsdPct !== null && oppRead.wtsdPct > 35) s -= 0.04;
+    if (oppRead.wtsdPct !== null && oppRead.wtsdPct < 24 && !facing?.facing) s -= 0.02;
+    if (oppRead.isNit && facing?.facing) s -= 0.03;
+  }
+
+  return Math.max(0, Math.min(1, s));
+}
+
+/** Bluff-frequency multiplier from HUD stats. */
+export function hudBluffMult(oppRead) {
+  if (!oppRead || oppRead.sampleSize < 4) return 1;
+  let mult = 1;
+  if (oppRead.wtsdPct !== null && oppRead.wtsdPct > 34) mult *= 0.5;
+  if (oppRead.foldToCbetPct !== null && oppRead.foldToCbetPct > 0.58) mult *= 1.15;
+  if (oppRead.isCallingStation) mult *= 0.4;
+  if (oppRead.isNit && oppRead.wtsdPct !== null && oppRead.wtsdPct < 26) mult *= 1.2;
+  return mult;
 }
 
 export function getOpponentRead(game, opponentIndex) {
@@ -239,6 +372,17 @@ export function getOpponentRead(game, opponentIndex) {
   const tightness = computeTightness(p);
   const isTight = tightness >= 0.58;
   const isLoose = tightness <= 0.38;
+  const hud = computeHudStats(p) || {};
+  const vpipPct = hud.vpipPct ?? null;
+  const pfrPct = hud.pfrPct ?? null;
+  const wtsdPct = hud.wtsdPct ?? null;
+  const wsdPct = hud.wsdPct ?? null;
+  const foldToCbetPct = hud.foldToCbetPct ?? null;
+  const isCallingStation = vpipPct !== null && pfrPct !== null
+    && vpipPct >= 38 && pfrPct <= 14;
+  const isNit = vpipPct !== null && pfrPct !== null
+    && vpipPct <= 18 && pfrPct <= 12;
+  const foldsToCbet = foldToCbetPct !== null && foldToCbetPct > 0.55;
 
   return {
     stabFreq: stabFreq ?? DEFAULT_READ.stabFreq,
@@ -259,6 +403,14 @@ export function getOpponentRead(game, opponentIndex) {
     tightness,
     isTight,
     isLoose,
+    vpipPct,
+    pfrPct,
+    wtsdPct,
+    wsdPct,
+    foldToCbetPct,
+    isCallingStation,
+    isNit,
+    foldsToCbet,
   };
 }
 
@@ -335,6 +487,10 @@ export function buildActionReadContext(game, playerIndex, action, toCall) {
   const countLimpOpp = facingBlindsOnly;
   const isLimp = countLimpOpp && action === 'call';
   const countPfrOpp = isPreflop && game.currentBet === game.bigBlind && toCall <= game.bigBlind;
+  const flopBettor = game.bettingLine?.streets?.flop?.bettor;
+  const facingCbet = game.phase === 'flop' && toCall > 0
+    && flopBettor === game.preflopAggressor
+    && flopBettor !== playerIndex;
 
   return {
     toCall,
@@ -345,5 +501,6 @@ export function buildActionReadContext(game, playerIndex, action, toCall) {
     countLimpOpp,
     isLimp,
     countPfrOpp,
+    facingCbet,
   };
 }
