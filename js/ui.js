@@ -230,9 +230,13 @@ export function renderTableDetails(elements, info) {
       const humans = info.members?.length ?? 0;
       const bots = Math.max(0, (info.settings?.playerCount ?? 0) - humans);
       if (info.isPublic) {
-        lobbyHint.textContent = info.isHost
-          ? `Open table — deal when ready. ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
-          : 'Open table — waiting for someone to deal.';
+        lobbyHint.textContent = info.allowBots === false
+          ? (info.isHost
+            ? 'Humans only — need at least 2 players seated to deal.'
+            : 'Humans only — waiting for more players or a deal.')
+          : (info.isHost
+            ? `Open table — deal when ready. ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
+            : 'Open table — waiting for someone to deal.');
       } else if (info.isHost) {
         lobbyHint.textContent = humans < 2
           ? `Share the link below. Deal when ready — ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
@@ -289,13 +293,16 @@ export function renderTableDetails(elements, info) {
   if (lobbyTableSettings && info.settings && info.members) {
     const connected = info.members.filter(m => m.connected !== false).length;
     const humans = connected || info.members.length;
-    const bots = Math.max(0, info.settings.playerCount - humans);
+    const bots = info.allowBots === false ? 0 : Math.max(0, info.settings.playerCount - humans);
     const stack = info.settings.startingStack ?? 1000;
     const rebuyText = formatRebuyLimit(info.settings.maxRebuys ?? 3);
     const anteText = formatAnteSetting(info.settings.anteFraction ?? 0);
     const antePart = anteText ? ` · ${anteText}` : '';
+    const typePart = info.isPublic
+      ? (info.allowBots === false ? ' · humans only' : ' · with bots')
+      : '';
     lobbyTableSettings.textContent =
-      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB · ${rebuyText}${antePart}`;
+      `${info.settings.playerCount} players (${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}) · $${stack.toLocaleString()} stacks · $${info.settings.bigBlind} BB · ${rebuyText}${antePart}${typePart}`;
   }
 }
 
@@ -340,6 +347,7 @@ export function buildTableInfo(game) {
       anteFraction: game.anteFraction ?? 0,
     },
     isPublic: !!game.isPublicRoom,
+    allowBots: game.allowBots !== false,
     displayName: game.roomDisplayName || game.roomId,
     status: game.roomStatus,
   };

@@ -8,17 +8,26 @@ export const PUBLIC_ROOM_DEFS = [
   {
     id: 'PUB001',
     name: 'Main Lounge',
+    allowBots: true,
     settings: { playerCount: 6, bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0 },
   },
   {
     id: 'PUB002',
     name: 'High Roller',
+    allowBots: true,
     settings: { playerCount: 6, bigBlind: 50, startingStack: 5000, maxRebuys: 3, anteFraction: 0 },
   },
   {
     id: 'PUB003',
+    name: 'Players Club',
+    allowBots: false,
+    settings: { bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0 },
+  },
+  {
+    id: 'PUB004',
     name: 'Quick Fire',
-    settings: { playerCount: 4, bigBlind: 10, startingStack: 500, maxRebuys: 1, anteFraction: 0.5 },
+    allowBots: false,
+    settings: { bigBlind: 10, startingStack: 500, maxRebuys: 1, anteFraction: 0.5 },
   },
 ];
 
@@ -38,9 +47,20 @@ export class RoomManager {
 
   initPublicRooms() {
     for (const def of PUBLIC_ROOM_DEFS) {
-      if (!this.rooms.has(def.id)) {
-        this.createPublicRoom(def);
+      const existing = this.rooms.get(def.id);
+      if (existing) {
+        existing.displayName = def.name;
+        existing.allowBots = def.allowBots !== false;
+        if (existing.status === 'lobby' && existing.membersByToken.size === 0) {
+          existing.settings.bigBlind = def.settings.bigBlind ?? existing.settings.bigBlind;
+          existing.settings.startingStack = def.settings.startingStack ?? existing.settings.startingStack;
+          existing.settings.maxRebuys = def.settings.maxRebuys ?? existing.settings.maxRebuys;
+          existing.settings.anteFraction = def.settings.anteFraction ?? existing.settings.anteFraction;
+          existing.settings.playerCount = existing.allowBots ? (def.settings.playerCount ?? 6) : 0;
+        }
+        continue;
       }
+      this.createPublicRoom(def);
     }
   }
 
@@ -48,10 +68,11 @@ export class RoomManager {
     const room = new Room(def.id, this.io, (id) => this.removeIfEmpty(id), {
       isPublic: true,
       displayName: def.name,
+      allowBots: def.allowBots !== false,
       onPublicChange: () => this.broadcastPublicRoomsUpdate(),
     });
     room.settings = {
-      playerCount: def.settings.playerCount ?? 6,
+      playerCount: def.allowBots === false ? 0 : (def.settings.playerCount ?? 6),
       bigBlind: def.settings.bigBlind ?? 20,
       startingStack: def.settings.startingStack ?? 1000,
       maxRebuys: def.settings.maxRebuys ?? 3,
@@ -71,7 +92,9 @@ export class RoomManager {
         maxPlayers: MAX_TABLE_SIZE,
         status: 'lobby',
         inHand: false,
+        allowBots: def.allowBots !== false,
         bigBlind: def.settings.bigBlind,
+        startingStack: def.settings.startingStack,
       };
     });
   }
@@ -103,10 +126,11 @@ export class RoomManager {
 }
 
 class Room {
-  constructor(id, io, onEmpty, { isPublic = false, displayName = null, onPublicChange = null } = {}) {
+  constructor(id, io, onEmpty, { isPublic = false, displayName = null, onPublicChange = null, allowBots = true } = {}) {
     this.id = id;
     this.isPublic = isPublic;
     this.displayName = displayName || id;
+    this.allowBots = allowBots;
     this.onPublicChange = onPublicChange;
     this.hostToken = null;
     this.io = io;
@@ -210,9 +234,22 @@ class Room {
       status: this.status,
       tableStatus,
       inHand,
+      allowBots: this.allowBots,
       bigBlind: this.settings.bigBlind,
       startingStack: this.settings.startingStack,
     };
+  }
+
+  syncPublicPlayerCount() {
+    if (!this.isPublic) return;
+    const n = this.membersByToken.size;
+    if (this.allowBots) {
+      if (this.status !== 'lobby') return;
+      this.settings.playerCount = Math.max(4, Math.min(MAX_TABLE_SIZE, Math.max(n, 4)));
+      if (n <= 2) this.settings.playerCount = Math.max(this.settings.playerCount, 6);
+    } else {
+      this.settings.playerCount = Math.max(0, Math.min(MAX_TABLE_SIZE, n));
+    }
   }
 
   isMidHand() {
@@ -370,10 +407,8 @@ class Room {
     socket.data.memberToken = token;
     if (isHost || !this.hostToken) this.hostToken = token;
 
-    if (this.isPublic && this.status === 'lobby') {
-      const n = this.membersByToken.size;
-      this.settings.playerCount = Math.max(4, Math.min(MAX_TABLE_SIZE, Math.max(n, 4)));
-      if (n <= 2) this.settings.playerCount = Math.max(this.settings.playerCount, 6);
+    if (this.isPublic) {
+      this.syncPublicPlayerCount();
     }
 
     this.message = `${displayName} joined the table.`;
@@ -495,6 +530,8 @@ class Room {
       ? `${leftName} timed out and left the table.`
       : `${leftName} left the table.`;
 
+    if (this.isPublic) this.syncPublicPlayerCount();
+
     this.afterMemberDeparture();
 
     if (this.status === 'lobby') {
@@ -525,7 +562,9 @@ class Room {
 
   afterMemberDeparture() {
     if (this.isSoloContinuation()) {
-      this.message = `${this.message} Empty seats are filled by bots until others join.`;
+      if (this.allowBots) {
+        this.message = `${this.message} Empty seats are filled by bots until others join.`;
+      }
       this.refreshSoloIdleCleanup();
     } else {
       this.clearSoloIdleTimer();
@@ -642,6 +681,9 @@ class Room {
     }
     if (this.connectedMemberCount() < 1) {
       return { ok: false, error: 'No players connected.' };
+    }
+    if (!this.allowBots && this.connectedMemberCount() < 2) {
+      return { ok: false, error: 'Need at least 2 players to deal.' };
     }
     if (this.game && this.game.phase !== 'idle' && this.game.phase !== 'showdown') {
       return { ok: false, error: 'Hand already in progress.' };
@@ -767,6 +809,7 @@ class Room {
       roomId: this.id,
       displayName: this.displayName,
       isPublic: this.isPublic,
+      allowBots: this.allowBots,
       status: this.status,
       isHost: forMember?.token === this.hostToken,
       hostId: hostMember?.socketId ?? null,

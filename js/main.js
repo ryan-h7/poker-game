@@ -169,12 +169,13 @@ function renderPublicRooms(rooms) {
     const statusClass = room.inHand ? 'in-hand' : '';
     const disabled = full || inRoom;
     const label = full ? 'Table full' : (inRoom ? 'Already seated' : 'Join table');
+    const tableType = room.allowBots === false ? 'Humans only' : 'With bots';
     return `<div class="public-room-card ${full ? 'is-full' : ''}" role="listitem">
       <div class="public-room-card-header">
         <span class="public-room-name">${escapeHtml(room.name)}</span>
         <span class="public-room-count">${seated}/${room.maxPlayers}</span>
       </div>
-      <div class="public-room-meta">$${room.bigBlind} BB · $${Number(room.startingStack).toLocaleString()} stacks</div>
+      <div class="public-room-meta">$${room.bigBlind} BB · $${Number(room.startingStack).toLocaleString()} stacks · ${tableType}</div>
       <div class="public-room-status ${statusClass}">${formatPublicRoomStatus(room)}</div>
       <button type="button" class="btn-join-public" data-room-id="${escapeHtml(room.id)}" ${disabled ? 'disabled' : ''}>${label}</button>
     </div>`;
@@ -589,6 +590,7 @@ const network = new NetworkClient({
     game.maxRebuys = lobby.settings.maxRebuys ?? 3;
     game.anteFraction = lobby.settings.anteFraction ?? 0;
     game.isPublicRoom = !!lobby.isPublic;
+    game.allowBots = lobby.allowBots !== false;
     game.roomDisplayName = lobby.displayName || lobby.roomId;
     game.roomId = lobby.roomId;
     game.inviteLink = lobby.inviteLink || game.inviteLink;
@@ -602,6 +604,7 @@ const network = new NetworkClient({
       members: lobby.members,
       settings: lobby.settings,
       isPublic: !!lobby.isPublic,
+      allowBots: lobby.allowBots !== false,
       displayName: lobby.displayName || lobby.roomId,
       status: lobby.status,
     });
@@ -611,8 +614,12 @@ const network = new NetworkClient({
       const humans = lobby.members?.length ?? 0;
       if (lobby.isPublic) {
         setMessage(elements.message, lobby.isHost
-          ? 'You\'re at the table — deal when ready. Bots fill empty seats.'
-          : 'You\'re at the table — waiting for someone to deal.');
+          ? (lobby.allowBots === false
+            ? 'Humans-only table — deal when at least 2 players are seated.'
+            : 'You\'re at the table — deal when ready. Bots fill empty seats.')
+          : (lobby.allowBots === false
+            ? 'Humans-only table — waiting for more players or a deal.'
+            : 'You\'re at the table — waiting for someone to deal.'));
       } else {
         setMessage(elements.message, lobby.isHost
           ? (humans < 2
@@ -643,6 +650,7 @@ const network = new NetworkClient({
     game.onlineMode = false;
     game.isHost = false;
     game.isPublicRoom = false;
+    game.allowBots = true;
     game.roomDisplayName = '';
     game.lobbyPanelOpen = false;
     game.roomStatus = 'lobby';
@@ -844,6 +852,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     game.onlineMode = true;
     game.isHost = true;
     game.isPublicRoom = false;
+    game.allowBots = true;
     game.roomDisplayName = '';
     game.roomStatus = 'lobby';
     game.lobbyPanelOpen = false;
@@ -966,6 +975,7 @@ function leaveOnlineRoom() {
   game.onlineMode = false;
   game.isHost = false;
   game.isPublicRoom = false;
+  game.allowBots = true;
   game.roomDisplayName = '';
   game.lobbyPanelOpen = false;
   game.roomStatus = 'lobby';
