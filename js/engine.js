@@ -149,6 +149,84 @@ export function preflopStrength(hole) {
   return 0.15 + a / 50 + b / 100;
 }
 
+function cardKey(card) {
+  return `${card.rank}${card.suit}`;
+}
+
+/**
+ * Monte Carlo equity: hero share of pot vs N random opponent hands.
+ * @returns {{ equity: number, samples: number }}
+ */
+export function estimateEquity(hole, community, opponentCount, options = {}) {
+  const oppCount = Math.max(1, Math.min(8, opponentCount || 1));
+  if (!hole?.length) return { equity: 0, samples: 0 };
+
+  const board = community || [];
+  const iterations = options.iterations ?? (
+    board.length >= 5 ? 220 : board.length === 0 ? 300 : 380
+  );
+
+  const knownKeys = new Set(
+    [...hole, ...board, ...(options.deadCards || [])].map(cardKey),
+  );
+  const deck = createDeck().filter((c) => !knownKeys.has(cardKey(c)));
+  const needBoard = Math.max(0, 5 - board.length);
+  const cardsNeeded = needBoard + oppCount * 2;
+  if (deck.length < cardsNeeded) {
+    return { equity: preflopStrength(hole), samples: 0 };
+  }
+
+  const acceptHole = options.acceptOpponentHole;
+
+  let equitySum = 0;
+  for (let sim = 0; sim < iterations; sim++) {
+    const d = shuffle(deck);
+    let idx = 0;
+    const runout = [...board];
+    while (runout.length < 5) runout.push(d[idx++]);
+
+    const heroScore = evaluateHand([...hole, ...runout]);
+    const scores = [heroScore];
+    for (let o = 0; o < oppCount; o++) {
+      const oppHole = sampleOpponentHole(d, idx, runout, acceptHole, o);
+      idx += 2;
+      scores.push(evaluateHand([...oppHole, ...runout]));
+    }
+
+    let best = scores[0];
+    for (let s = 1; s < scores.length; s++) {
+      if (compareHands(scores[s], best) > 0) best = scores[s];
+    }
+    let atBest = 0;
+    let heroAtBest = false;
+    for (let s = 0; s < scores.length; s++) {
+      if (compareHands(scores[s], best) === 0) {
+        atBest += 1;
+        if (s === 0) heroAtBest = true;
+      }
+    }
+    equitySum += heroAtBest ? 1 / atBest : 0;
+  }
+
+  return { equity: equitySum / iterations, samples: iterations };
+}
+
+function sampleOpponentHole(deck, idx, board, acceptHole, oppNum) {
+  const fallback = () => [deck[idx], deck[idx + 1]];
+  if (!acceptHole) return fallback();
+
+  for (let attempt = 0; attempt < 28; attempt++) {
+    const hole = [deck[idx], deck[idx + 1]];
+    if (acceptHole(hole, board, oppNum)) return hole;
+    const pairsLeft = Math.floor((deck.length - idx - 2) / 2);
+    if (pairsLeft < 1) break;
+    const j = idx + 2 + Math.floor(Math.random() * pairsLeft) * 2;
+    [deck[idx], deck[j]] = [deck[j], deck[idx]];
+    [deck[idx + 1], deck[j + 1]] = [deck[j + 1], deck[idx + 1]];
+  }
+  return fallback();
+}
+
 /** Detect flush/straight draws from hole + community (post-flop). */
 export function detectDraws(hole, community) {
   if (community.length < 3) {

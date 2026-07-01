@@ -1,4 +1,4 @@
-import { classifyHand, evaluateHand } from './engine.js';
+import { classifyHand, evaluateHand, preflopStrength } from './engine.js';
 
 export function createOpponentProfile() {
   return {
@@ -425,6 +425,95 @@ export function getPrimaryVillain(game, playerIndex) {
     return game.preflopAggressor;
   }
   return -1;
+}
+
+/**
+ * Range filter for equity sims — tightens/loosens sampled opponent hands from HUD + line.
+ */
+export function buildOpponentRangeSpec(game, opponentIndex, heroIndex) {
+  const read = getOpponentRead(game, opponentIndex);
+  const community = game.community || [];
+  const isPreflop = community.length === 0;
+  const pfa = game.preflopAggressor === opponentIndex;
+  const lastRaiser = game.lastRaiser === opponentIndex;
+  const streetBettor = game.bettingLine?.streets?.[game.phase]?.bettor;
+  const ledStreet = streetBettor === opponentIndex;
+  const showingStrength = pfa || lastRaiser || ledStreet;
+  const bb = game.bigBlind || 20;
+  const is3BetPlus = game.currentBet > bb * 4.5;
+
+  let minPreflop = 0.3;
+  if (read.sampleSize >= 3 && read.vpipPct !== null) {
+    minPreflop = 0.14 + ((100 - read.vpipPct) / 100) * 0.5;
+  }
+  if (read.isCallingStation && !showingStrength) minPreflop -= 0.07;
+  if (read.isLoose && !read.isNit) minPreflop -= 0.04;
+
+  if (showingStrength) {
+    let raiseFloor = read.pfrPct !== null
+      ? 0.22 + ((100 - read.pfrPct) / 100) * 0.48
+      : 0.44;
+    if (read.isNit) raiseFloor += 0.1;
+    if (read.isLoose && !read.isNit) raiseFloor -= 0.07;
+    if (is3BetPlus) raiseFloor += 0.06;
+    if (!isPreflop && ledStreet) raiseFloor += 0.03;
+    minPreflop = Math.max(minPreflop, raiseFloor);
+  }
+
+  minPreflop = Math.max(0.12, Math.min(0.72, minPreflop));
+
+  let minMadeStrength = 0.15;
+  let bluffAllow = 0.12;
+  if (!isPreflop) {
+    if (showingStrength) {
+      minMadeStrength = 0.26 + read.tightness * 0.24;
+      if (read.isNit) minMadeStrength += 0.08;
+      if (read.isStabBluffer) {
+        minMadeStrength -= 0.1;
+        bluffAllow = 0.38;
+      } else if (read.isStabHappy) {
+        minMadeStrength -= 0.06;
+        bluffAllow = 0.24;
+      }
+      if (read.isCallingStation) minMadeStrength -= 0.05;
+    } else {
+      minMadeStrength = 0.1 + read.tightness * 0.14;
+      bluffAllow = 0.45;
+    }
+  }
+
+  return {
+    read,
+    minPreflop,
+    minMadeStrength,
+    isPreflop,
+    showingStrength,
+    bluffAllow,
+    signature: `${read.sampleSize}:${read.vpipPct ?? 'x'}:${read.pfrPct ?? 'x'}:${minPreflop.toFixed(2)}:${minMadeStrength.toFixed(2)}:${showingStrength}`,
+  };
+}
+
+/** Whether a random opponent hole is plausible given their style and line. */
+export function opponentHandPlausible(hole, board, spec) {
+  if (!hole?.length || !spec) return true;
+
+  const pf = preflopStrength(hole);
+  if (pf < spec.minPreflop) return false;
+
+  if ((board?.length ?? 0) < 3) return true;
+
+  const made = classifyHand(hole, board);
+  if (made.category === 'premium') return true;
+
+  if (spec.showingStrength) {
+    if (made.strength >= spec.minMadeStrength) return true;
+    if (made.category === 'draw' && (made.draws?.drawStrength ?? 0) > 0.38) return true;
+    return Math.random() < spec.bluffAllow;
+  }
+
+  if (made.strength >= spec.minMadeStrength - 0.1) return true;
+  if (made.category === 'draw') return Math.random() < 0.65;
+  return Math.random() < 0.5;
 }
 
 /** Reads for a limped preflop pot (callers at the big blind). */

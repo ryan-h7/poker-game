@@ -873,6 +873,7 @@ export class PokerGame {
     this.fastForward = false;
     this.handsRevealed = false;
     this.lastHandWinnerIndices = [];
+    this._equityCache = null;
     this.clearAiTimer();
     this.currentHandEvents = [];
     this.handSnapshot = null;

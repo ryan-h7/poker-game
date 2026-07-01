@@ -1,7 +1,8 @@
 import {
   classifyHand, boardTexture, analyzeBlockers, boardScareFactor,
+  estimateEquity,
 } from './engine.js';
-import { getOpponentRead, getPrimaryVillain, getLimpedPotRead, getPreflopSizeMult, applyHudToStrength, hudBluffMult } from './opponent.js';
+import { getOpponentRead, getPrimaryVillain, getLimpedPotRead, getPreflopSizeMult, applyHudToStrength, hudBluffMult, buildOpponentRangeSpec, opponentHandPlausible } from './opponent.js';
 
 export function getPositionTier(playerIndex, dealerIndex, totalPlayers) {
   const afterBtn = (playerIndex - dealerIndex + totalPlayers) % totalPlayers;
@@ -187,9 +188,9 @@ function coldCallTightness(pressure) {
   return 0.42;
 }
 
-/** Pot odds, implied-odds slack, and equity estimate for call/fold decisions. */
+/** Pot odds, implied-odds slack, and equity for call/fold decisions. */
 function getPotOddsContext(game, player, {
-  hand, stackCtx, facing, isPreflop, potCtx, effectiveStrength,
+  hand, stackCtx, facing, isPreflop, potCtx, effectiveStrength, equity,
 }) {
   const toCall = game.currentBet - player.bet;
   const potAfterCall = Math.max(game.pot + toCall, game.bigBlind);
@@ -198,7 +199,7 @@ function getPotOddsContext(game, player, {
 
   let impliedBonus = 0;
   if (hand?.category === 'draw') {
-    impliedBonus = 0.06 + (hand.draws?.drawStrength ?? 0) * 0.14;
+    impliedBonus = 0.04 + (hand.draws?.drawStrength ?? 0) * 0.1;
     if (stackCtx.isDeep) impliedBonus += 0.05;
     if (stackCtx.highSpr) impliedBonus += 0.03;
   } else if (hand?.category === 'speculative') {
@@ -215,10 +216,11 @@ function getPotOddsContext(game, player, {
   if (potCtx?.isMultiway && !isPreflop) impliedBonus -= 0.04;
   if (potCtx?.isHeadsUp && !isPreflop) impliedBonus += 0.02;
 
-  const equityEstimate = effectiveStrength ?? hand?.strength ?? 0.4;
+  const equityEstimate = equity ?? effectiveStrength ?? hand?.strength ?? 0.4;
   const callableEquity = Math.max(0, requiredEquity - impliedBonus);
   const hasPrice = equityEstimate >= callableEquity - 0.03;
   const hasGreatPrice = equityEstimate >= callableEquity + 0.05;
+  const equityEdge = equityEstimate - callableEquity;
 
   return {
     toCall,
@@ -228,9 +230,53 @@ function getPotOddsContext(game, player, {
     impliedBonus,
     callableEquity,
     equityEstimate,
+    equityEdge,
     hasPrice,
     hasGreatPrice,
   };
+}
+
+function getHeroEquity(game, player, playerIndex) {
+  if (!player.hole?.length) return { equity: 0, samples: 0 };
+
+  const oppIndices = [];
+  for (let i = 0; i < game.players.length; i++) {
+    const p = game.players[i];
+    if (i !== playerIndex && p.inHand && !p.folded) oppIndices.push(i);
+  }
+  const oppCount = Math.max(1, oppIndices.length);
+  const rangeSpecs = oppIndices.map((i) => buildOpponentRangeSpec(game, i, playerIndex));
+
+  if (!game._equityCache) game._equityCache = new Map();
+  const readSig = rangeSpecs.map((s) => s.signature).join(';');
+  const key = [
+    playerIndex,
+    game.phase,
+    game.community.map(cardKey).join(','),
+    player.hole.map(cardKey).join(','),
+    oppCount,
+    game.currentBet,
+    player.bet,
+    readSig,
+  ].join('|');
+
+  if (game._equityCache.has(key)) return game._equityCache.get(key);
+
+  const iterations = game.fastForward ? 100 : undefined;
+  const acceptOpponentHole = (hole, board, oppNum) => {
+    const spec = rangeSpecs[oppNum];
+    return spec ? opponentHandPlausible(hole, board, spec) : true;
+  };
+  const result = estimateEquity(player.hole, game.community, oppCount, {
+    iterations,
+    acceptOpponentHole,
+  });
+  game._equityCache.set(key, result);
+  return result;
+}
+
+function cardKey(card) {
+  return `${card.rank}${card.suit}`;
 }
 
 function callIfPricedIn(priceCtx, stackCtx, facing, player, baseStackFrac = 0.22) {
@@ -531,7 +577,7 @@ function decideCbetOrBarrel(player, game, hand, aggression, barrelCtx, potCtx, s
 }
 
 /** Defender vs c-bet / barrel. */
-function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead, stackCtx) {
+function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead, stackCtx, equity = 0) {
   const toCall = game.currentBet - player.bet;
   if (toCall <= 0) return null;
 
@@ -555,6 +601,7 @@ function decideVsBarrel(player, game, hand, aggression, facing, barrelCtx, potCt
     let need = 0.32 + hand.draws.drawStrength * 0.2 + mwFoldBias;
     if (stackCtx.isDeep) need -= 0.04;
     if (stackCtx.isShallow) need += 0.05;
+    if (equity >= potOdds - 0.03) return { action: 'call' };
     if (potOdds < need) return { action: 'call' };
     if (isBarrel && facing.sizeCategory === 'large') return { action: 'fold' };
     if (potCtx.isMultiway && facing.sizeCategory !== 'small') return { action: 'fold' };
@@ -1095,6 +1142,7 @@ export function decideAction(player, game) {
 
   const hand = classifyHand(player.hole, game.community);
   const blockers = isPreflop ? { score: 0, details: [] } : analyzeBlockers(player.hole, game.community);
+  const { equity } = getHeroEquity(game, player, playerIndex);
   let strength = hand.strength;
 
   if (!isPreflop) {
@@ -1102,16 +1150,19 @@ export function decideAction(player, game) {
     if (hand.category === 'air' || hand.category === 'draw') {
       strength += blockers.score * 0.12;
     }
+    strength = strength * 0.35 + equity * 0.65;
+  } else {
+    strength = strength * 0.4 + equity * 0.6;
   }
 
   if (!isPreflop) {
     const villainRange = estimateVillainRangeStrength(game, playerIndex, {
       facing, barrelCtx, oppRead, potCtx,
     });
-    const ahead = hand.strength > villainRange + 0.1;
-    const behind = hand.strength < villainRange - 0.1;
-    strength = strength * 0.65 + (ahead ? 0.25 : behind ? -0.1 : 0);
-    if (hand.category === 'draw') strength += hand.draws.drawStrength * 0.15;
+    const ahead = equity > villainRange + 0.08;
+    const behind = equity < villainRange - 0.08;
+    strength = strength * 0.55 + (ahead ? 0.22 : behind ? -0.12 : 0);
+    if (hand.category === 'draw') strength += hand.draws.drawStrength * 0.1;
   }
 
   const aggression = player.personality?.aggression ?? 0.5;
@@ -1135,7 +1186,7 @@ export function decideAction(player, game) {
     }
 
     const defendAction = decideVsBarrel(
-      player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead, stackCtx,
+      player, game, hand, aggression, facing, barrelCtx, potCtx, oppRead, stackCtx, equity,
     );
     if (defendAction) return defendAction;
 
@@ -1157,7 +1208,7 @@ export function decideAction(player, game) {
   effectiveStrength = applyHudToStrength(effectiveStrength, oppRead, { isPreflop, facing, canCheck });
 
   const priceCtx = getPotOddsContext(game, player, {
-    hand, stackCtx, facing, isPreflop, potCtx, effectiveStrength,
+    hand, stackCtx, facing, isPreflop, potCtx, effectiveStrength, equity,
   });
 
   const bluffRoll = Math.random() < 0.14 * aggression * pos.bluffMult * potCtx.multiwayScalar
@@ -1206,7 +1257,8 @@ export function decideAction(player, game) {
   if (hand.category === 'premium') {
     const valueThreshold = pos.openThreshold - aggression * 0.05 + facing.reraiseExtra
       + stackCtx.openThresholdAdj;
-    if (effectiveStrength > valueThreshold) {
+    const strongEnough = effectiveStrength > valueThreshold || equity >= 0.62;
+    if (strongEnough) {
       if (stackCtx.isShort && (facing.facing || !canCheck) && player.chips > 0) {
         return { action: 'raise', amount: player.bet + player.chips };
       }
@@ -1331,15 +1383,17 @@ export function decideAction(player, game) {
     if (tier === 'top' || tier === 'overpair') callLimit += 0.06 * cold;
     else if (tier === 'bottom' || tier === 'underpair') callLimit -= 0.08 * cold;
     if (facing.sizeCategory === 'small') callLimit += (isStrongPair(hand) ? 0.08 : 0.04) * cold;
-    if (potCtx.coldCallPressure >= 2 && hand.strength < 0.5 && !isStrongPair(hand)) {
+    if (potCtx.coldCallPressure >= 2 && equity < 0.38 && !isStrongPair(hand) && !priceCtx.hasPrice) {
       return { action: 'fold' };
     }
     if (facing.sizeCategory === 'large' || facing.sizeCategory === 'overbet') {
-      if (isWeakPair(hand) && !oppRead.isStabBluffer) return { action: 'fold' };
-      if (tier === 'middle' && facing.sizeCategory === 'overbet' && !oppRead.isStabHappy) {
+      if (isWeakPair(hand) && !oppRead.isStabBluffer && equity < priceCtx.callableEquity) return { action: 'fold' };
+      if (tier === 'middle' && facing.sizeCategory === 'overbet' && !oppRead.isStabHappy
+          && equity < priceCtx.callableEquity + 0.05) {
         return { action: 'fold' };
       }
     }
+    if (equity >= priceCtx.callableEquity + 0.04 && !isWeakPair(hand)) return { action: 'call' };
     const callLimitAdj = oppRead.isStabBluffer ? 0.04 : 0;
     const callFrac = (callLimit + callLimitAdj) * stackCtx.callCapMult;
     if (callIfPricedIn(priceCtx, stackCtx, facing, player, callFrac)) {
