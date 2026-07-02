@@ -10,6 +10,7 @@ import {
   resetOpponentProfiles,
   markPlayersSawFlop,
   markShowdownPlayers,
+  profileToHudSummary,
 } from './opponent.js';
 
 const STARTING_CHIPS = 1000;
@@ -86,6 +87,7 @@ export class PokerGame {
     this.tableDetailsOpen = false;
     this.localSocketId = null;
     this.opponentProfiles = null;
+    this.tableHudStats = null;
     this.lastHandWinnerIndices = [];
     this.soloSessionActive = false;
   }
@@ -218,6 +220,9 @@ export class PokerGame {
         hole: showHole(p, i),
       })),
       actedThisRound: [...this.actedThisRound],
+      tableHudStats: this.opponentProfiles
+        ? this.opponentProfiles.map((p) => profileToHudSummary(p))
+        : (this.tableHudStats ?? null),
     };
   }
 
@@ -246,6 +251,7 @@ export class PokerGame {
     if (state.roomId) this.roomId = state.roomId;
     if (state.inviteLink) this.inviteLink = state.inviteLink;
     if (state.members?.length) this.setRoomMembers(state.members);
+    if (state.tableHudStats) this.tableHudStats = state.tableHudStats;
     this.players = (state.players || []).map((p, i) => {
       const existing = this.players[i];
       const memberName = this.roomMembers.get(i)?.name;

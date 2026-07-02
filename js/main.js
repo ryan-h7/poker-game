@@ -595,6 +595,7 @@ const network = new NetworkClient({
     game.roomId = lobby.roomId;
     game.inviteLink = lobby.inviteLink || game.inviteLink;
     game.setOnlinePlayers(lobby.members, lobby.settings.playerCount, true);
+    if (lobby.tableHudStats) game.tableHudStats = lobby.tableHudStats;
     hideJoinModal(elements);
     renderTableDetails(elements, {
       roomId: lobby.roomId,

@@ -297,6 +297,22 @@ export function computeHudStats(profile) {
   return { vpipPct, pfrPct, wtsdPct, wsdPct, foldToCbetPct };
 }
 
+/** Compact HUD row for UI tooltips (this table only). */
+export function profileToHudSummary(profile) {
+  if (!profile) return null;
+  const hands = profile.hands || 0;
+  if (hands < 1) return { hands: 0, vpipPct: null, pfrPct: null, wtsdPct: null, wsdPct: null };
+
+  const hud = computeHudStats(profile);
+  return {
+    hands,
+    vpipPct: hud?.vpipPct ?? pct(profile.vpipHands, hands),
+    pfrPct: hud?.pfrPct ?? null,
+    wtsdPct: hud?.wtsdPct ?? null,
+    wsdPct: hud?.wsdPct ?? null,
+  };
+}
+
 /** Adjust hand-strength threshold from session HUD stats. */
 export function applyHudToStrength(strength, oppRead, { isPreflop, facing, canCheck } = {}) {
   if (!oppRead || oppRead.sampleSize < 4) return strength;

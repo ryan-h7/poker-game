@@ -167,6 +167,78 @@ header h1 {
   align-items: center;
   gap: 0.35rem;
   transition: opacity 0.3s, transform 0.3s;
+  pointer-events: auto;
+}
+
+.player-seat.has-hud {
+  cursor: help;
+}
+
+.player-hud-tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 9.5rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(12, 16, 22, 0.96);
+  border: 1px solid #3d4654;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 30;
+  text-align: left;
+}
+
+.player-seat.has-hud:hover .player-hud-tooltip,
+.player-seat.has-hud:focus-within .player-hud-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.player-hud-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.player-hud-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem 0.65rem;
+  margin: 0;
+}
+
+.player-hud-grid div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.player-hud-grid dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.player-hud-grid dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.player-hud-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-align: center;
 }
 
 .player-seat.folded {

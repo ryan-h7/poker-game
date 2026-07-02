@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { PokerGame } from '../js/game.js';
+import { profileToHudSummary } from '../js/opponent.js';
 
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_TABLE_SIZE = 8;
@@ -817,6 +818,9 @@ class Room {
       message: this.message,
       settings: { ...this.settings },
       members: this.allMembers().map(m => this.memberPayload(m)),
+      tableHudStats: this.game?.opponentProfiles
+        ? this.game.opponentProfiles.map((p) => profileToHudSummary(p))
+        : null,
     };
   }
 

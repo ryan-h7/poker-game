@@ -1,4 +1,5 @@
 import { SUIT_COLORS } from './engine.js';
+import { profileToHudSummary } from './opponent.js';
 
 export const POT_BET_PRESETS = [0.25, 0.33, 0.5, 0.66, 0.75, 1, 1.25];
 
@@ -397,6 +398,31 @@ function renderCommunity(game, el) {
   el.innerHTML = html;
 }
 
+function getSeatHudStats(game, seatIndex) {
+  if (game.tableHudStats?.[seatIndex]) return game.tableHudStats[seatIndex];
+  if (game.opponentProfiles?.[seatIndex]) return profileToHudSummary(game.opponentProfiles[seatIndex]);
+  return null;
+}
+
+function formatHudPct(value) {
+  return value === null || value === undefined ? '—' : `${value}%`;
+}
+
+function renderHudTooltip(stats) {
+  if (!stats || stats.hands < 1) return '';
+  return `<div class="player-hud-tooltip" role="tooltip">
+    <p class="player-hud-title">Table stats</p>
+    <dl class="player-hud-grid">
+      <div><dt>Hands</dt><dd>${stats.hands}</dd></div>
+      <div><dt>VPIP</dt><dd>${formatHudPct(stats.vpipPct)}</dd></div>
+      <div><dt>PFR</dt><dd>${formatHudPct(stats.pfrPct)}</dd></div>
+      <div><dt>WTSD</dt><dd>${formatHudPct(stats.wtsdPct)}</dd></div>
+      <div><dt>W$SD</dt><dd>${formatHudPct(stats.wsdPct)}</dd></div>
+    </dl>
+    <p class="player-hud-note">This table only</p>
+  </div>`;
+}
+
 function renderPlayers(game, el) {
   el.innerHTML = game.players.map((p, i) => {
     const viewIndex = getViewSeatIndex(game, i);
@@ -416,12 +442,16 @@ function renderPlayers(game, el) {
     const peekFolded = (game.onlineMode ? i === game.localSeatIndex : p.isHuman) && folded && faceDown;
     const youTag = game.onlineMode && i === game.localSeatIndex ? ' (you)' : '';
     const displayName = game.onlineMode ? game.getSeatDisplayName(i) : p.name;
+    const isYou = game.onlineMode ? i === game.localSeatIndex : !!p.isHuman;
+    const hudStats = !isYou ? getSeatHudStats(game, i) : null;
+    const hudHtml = hudStats?.hands >= 1 ? renderHudTooltip(hudStats) : '';
 
     const cards = p.hole.length
       ? p.hole.map(c => peekFolded ? peekCardHTML(c) : cardHTML(c, faceDown)).join('')
       : '<div class="card card-empty"></div><div class="card card-empty"></div>';
 
-    return `<div class="player-seat ${isActive ? 'active' : ''} ${folded ? 'folded' : ''} ${peekFolded ? 'peek-cards' : ''}" style="${style}">
+    return `<div class="player-seat ${isActive ? 'active' : ''} ${folded ? 'folded' : ''} ${peekFolded ? 'peek-cards' : ''} ${hudHtml ? 'has-hud' : ''}" style="${style}">
+      ${hudHtml}
       ${isDealer ? '<span class="dealer-button">D</span>' : ''}
       <div class="player-cards">${cards}</div>
       <div class="player-info">
