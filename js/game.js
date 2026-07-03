@@ -1066,14 +1066,26 @@ export class PokerGame {
         continue;
       }
 
-      this.activeIndex = this.nextActive(this.activeIndex);
       const player = this.players[this.activeIndex];
-      if (player.isHuman && this.canActInBetting(player)) break;
+      if (!player?.inHand || player.folded) {
+        this.activeIndex = this.nextActive(this.activeIndex);
+        continue;
+      }
+
+      if (!this.canActInBetting(player)) {
+        this.actedThisRound.add(this.activeIndex);
+        this.activeIndex = this.nextActive(this.activeIndex);
+        continue;
+      }
+
+      // Human already folded pre-flop when skip is allowed; stop if they somehow need to act.
+      if (player.isHuman) break;
 
       this.executeAiTurn(player);
     }
 
     this.fastForward = false;
+    this.clearAiTimer();
     this.onUpdate();
   }
 
@@ -1232,6 +1244,11 @@ export class PokerGame {
       this.awardPot(remaining);
       return;
     }
+    // Skip-to-end runs the hand synchronously; don't schedule async AI turns.
+    if (this.fastForward) {
+      this.activeIndex = this.nextActive(this.activeIndex);
+      return;
+    }
     this.advanceTurn();
   }
 
@@ -1285,6 +1302,7 @@ export class PokerGame {
     }
 
     this.activeIndex = this.nextActive(this.dealerIndex);
+    if (this.fastForward) return;
     this.onUpdate();
     this.processTurn();
   }
