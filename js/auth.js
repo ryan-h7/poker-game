@@ -11,10 +11,11 @@ async function loadHealth() {
     const data = await res.json().catch(() => ({}));
     healthInfo = {
       db: res.ok && data.db === true,
-      passwordReset: res.ok && data.passwordReset === true,
+      passwordReset: res.ok && (data.passwordReset === true || data.email === true),
+      emailVerification: res.ok && (data.emailVerification === true || data.email === true),
     };
   } catch {
-    healthInfo = { db: false, passwordReset: false };
+    healthInfo = { db: false, passwordReset: false, emailVerification: false };
   }
   return healthInfo;
 }
@@ -27,6 +28,11 @@ export async function checkDbAvailable() {
 export async function isPasswordResetAvailable() {
   const health = await loadHealth();
   return health.passwordReset;
+}
+
+export async function isEmailVerificationAvailable() {
+  const health = await loadHealth();
+  return health.emailVerification;
 }
 
 async function apiFetch(path, options = {}) {
@@ -109,22 +115,41 @@ export async function initAuth() {
 }
 
 export async function register({ email, password, displayName }) {
-  const { res, data } = await apiFetch('/auth/register', {
+  const { data } = await apiFetch('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password, displayName }),
+  });
+  if (!data.ok) return data;
+  if (data.needsVerification) return data;
+  if (data.token && data.user) saveSession(data.token, data.user);
+  return data;
+}
+
+export async function login({ email, password }) {
+  const { data } = await apiFetch('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
   });
   if (!data.ok) return data;
   saveSession(data.token, data.user);
   return data;
 }
 
-export async function login({ email, password }) {
-  const { res, data } = await apiFetch('/auth/login', {
+export async function verifyEmail(token) {
+  const { data } = await apiFetch('/auth/verify-email', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ token }),
   });
   if (!data.ok) return data;
-  saveSession(data.token, data.user);
+  if (data.token && data.user) saveSession(data.token, data.user);
+  return data;
+}
+
+export async function resendVerification(email) {
+  const { data } = await apiFetch('/auth/resend-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
   return data;
 }
 

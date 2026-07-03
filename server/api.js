@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { isDbEnabled } from './db.js';
-import { isResetEmailConfigured } from './mail.js';
+import { isEmailConfigured } from './mail.js';
 import {
   authMiddleware,
   registerUser,
@@ -9,6 +9,8 @@ import {
   updateUserDisplayName,
   requestPasswordReset,
   resetPasswordWithToken,
+  verifyEmailWithToken,
+  resendVerificationEmail,
   getAppBaseUrl,
 } from './auth.js';
 import { query } from './db.js';
@@ -16,10 +18,13 @@ import { query } from './db.js';
 const router = Router();
 
 router.get('/health', (_, res) => {
+  const email = isDbEnabled() && isEmailConfigured();
   res.json({
     ok: true,
     db: isDbEnabled(),
-    passwordReset: isDbEnabled() && isResetEmailConfigured(),
+    email,
+    passwordReset: email,
+    emailVerification: email,
   });
 });
 
@@ -35,7 +40,7 @@ router.use(dbRequired);
 
 router.post('/auth/register', async (req, res) => {
   try {
-    const result = await registerUser(req.body || {});
+    const result = await registerUser(req.body || {}, getAppBaseUrl(req));
     res.status(result.ok ? 200 : 400).json(result);
   } catch (err) {
     console.error('register error', err);
@@ -50,6 +55,26 @@ router.post('/auth/login', async (req, res) => {
   } catch (err) {
     console.error('login error', err);
     res.status(500).json({ ok: false, error: 'Could not sign in.' });
+  }
+});
+
+router.post('/auth/verify-email', async (req, res) => {
+  try {
+    const result = await verifyEmailWithToken(req.body?.token);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('verify email error', err);
+    res.status(500).json({ ok: false, error: 'Could not verify email.' });
+  }
+});
+
+router.post('/auth/resend-verification', async (req, res) => {
+  try {
+    const result = await resendVerificationEmail(req.body?.email, getAppBaseUrl(req));
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('resend verification error', err);
+    res.status(500).json({ ok: false, error: 'Could not resend verification email.' });
   }
 });
 

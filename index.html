@@ -195,7 +195,8 @@
       <input type="email" id="auth-email" class="join-modal-input" autocomplete="email" inputmode="email">
       <label class="join-modal-label" for="auth-password">Password</label>
       <input type="password" id="auth-password" class="join-modal-input" autocomplete="current-password" minlength="8">
-      <p id="auth-password-hint" class="join-modal-hint auth-password-hint hidden">Pick a password you'll remember — we can't reset it if you forget.</p>
+      <p id="auth-password-hint" class="join-modal-hint auth-password-hint hidden">Use at least 8 characters. You can reset your password by email if you forget it.</p>
+      <p id="auth-verify-hint" class="join-modal-hint auth-verify-hint hidden">We'll email you a verification link. You must confirm your email before signing in.</p>
       <p id="auth-forgot-wrap" class="auth-forgot-wrap">
         <button type="button" id="btn-auth-forgot" class="btn-auth-link hidden">Forgot password?</button>
         <span id="auth-reset-unavailable" class="join-modal-hint auth-reset-unavailable hidden">Password reset isn't available — sign in with the password you created when you registered.</span>
@@ -205,6 +206,10 @@
       <input type="text" id="auth-display-name" class="join-modal-input auth-display-name-input hidden" maxlength="16" autocomplete="nickname">
       <p id="auth-display-name-hint" class="join-modal-hint auth-display-name-hint hidden">This isn't permanent — you can update your display name any time you sign in.</p>
       <p id="auth-modal-error" class="join-modal-error hidden"></p>
+      <p id="auth-modal-success" class="join-modal-success hidden"></p>
+      <p id="auth-resend-wrap" class="auth-forgot-wrap hidden">
+        <button type="button" id="btn-auth-resend" class="btn-auth-link">Resend verification email</button>
+      </p>
       <div class="join-modal-actions">
         <button id="btn-auth-submit" class="btn btn-join-modal" type="button">Sign in</button>
         <button id="btn-auth-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>

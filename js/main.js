@@ -91,6 +91,7 @@ const elements = {
   authDisplayNameLabel: document.querySelector('.auth-display-name-label'),
   authDisplayNameHint: document.getElementById('auth-display-name-hint'),
   authModalError: document.getElementById('auth-modal-error'),
+  authModalSuccess: document.getElementById('auth-modal-success'),
   authTabLogin: document.getElementById('auth-tab-login'),
   authTabRegister: document.getElementById('auth-tab-register'),
   authSubmitBtn: document.getElementById('btn-auth-submit'),
@@ -99,7 +100,10 @@ const elements = {
   authForgotBtn: document.getElementById('btn-auth-forgot'),
   authResetUnavailable: document.getElementById('auth-reset-unavailable'),
   authPasswordHint: document.getElementById('auth-password-hint'),
+  authVerifyHint: document.getElementById('auth-verify-hint'),
   authSigninNameHint: document.getElementById('auth-signin-name-hint'),
+  authResendWrap: document.getElementById('auth-resend-wrap'),
+  authResendBtn: document.getElementById('btn-auth-resend'),
   accountModal: document.getElementById('account-modal'),
   accountEmail: document.getElementById('account-email'),
   accountDisplayName: document.getElementById('account-display-name'),
@@ -137,7 +141,9 @@ let soloSaveTimer;
 let authTab = 'login';
 let accountsEnabled = false;
 let passwordResetEnabled = false;
+let emailVerificationEnabled = false;
 let pendingResetToken = null;
+let pendingVerifyEmail = '';
 let publicRoomsPollTimer = null;
 let cachedPublicRooms = [];
 
@@ -310,6 +316,16 @@ function setAuthModalError(message) {
   elements.authModalError.classList.toggle('hidden', !message);
 }
 
+function setAuthModalSuccess(message) {
+  if (!elements.authModalSuccess) return;
+  elements.authModalSuccess.textContent = message || '';
+  elements.authModalSuccess.classList.toggle('hidden', !message);
+}
+
+function setAuthResendVisible(visible) {
+  elements.authResendWrap?.classList.toggle('hidden', !visible);
+}
+
 function updateAuthResetUI() {
   const isRegister = authTab === 'register';
   const showForgot = !isRegister && passwordResetEnabled;
@@ -318,7 +334,9 @@ function updateAuthResetUI() {
   elements.authResetUnavailable?.classList.toggle('hidden', !showUnavailable);
   elements.authForgotWrap?.classList.toggle('hidden', isRegister);
   elements.authPasswordHint?.classList.toggle('hidden', !isRegister || !accountsEnabled);
+  elements.authVerifyHint?.classList.toggle('hidden', !isRegister || !emailVerificationEnabled);
   elements.authSigninNameHint?.classList.toggle('hidden', isRegister || !accountsEnabled);
+  if (isRegister) setAuthResendVisible(false);
 }
 
 function setAuthTab(tab) {
@@ -329,6 +347,11 @@ function setAuthTab(tab) {
   elements.authDisplayName?.classList.toggle('hidden', !isRegister);
   elements.authDisplayNameLabel?.classList.toggle('hidden', !isRegister);
   elements.authDisplayNameHint?.classList.toggle('hidden', !isRegister);
+  setAuthModalError('');
+  if (isRegister) {
+    setAuthModalSuccess('');
+    setAuthResendVisible(false);
+  }
   if (elements.authSubmitBtn) {
     elements.authSubmitBtn.textContent = isRegister ? 'Create account' : 'Sign in';
   }
@@ -488,6 +511,9 @@ function consumeResetTokenFromUrl() {
 
 function showAuthModal(tab = 'login') {
   setAuthTab(tab);
+  setAuthModalError('');
+  setAuthModalSuccess('');
+  setAuthResendVisible(false);
   elements.authModal?.classList.remove('hidden');
   elements.authEmail?.focus();
 }
@@ -495,6 +521,8 @@ function showAuthModal(tab = 'login') {
 function hideAuthModal() {
   elements.authModal?.classList.add('hidden');
   setAuthModalError('');
+  setAuthModalSuccess('');
+  setAuthResendVisible(false);
 }
 
 async function handleAuthSubmit() {
@@ -506,14 +534,29 @@ async function handleAuthSubmit() {
     return;
   }
   elements.authSubmitBtn.disabled = true;
+  setAuthModalError('');
+  setAuthModalSuccess('');
+  setAuthResendVisible(false);
   try {
     const result = authTab === 'register'
       ? await auth.register({ email, password, displayName })
       : await auth.login({ email, password });
+
+    if (result.needsVerification) {
+      pendingVerifyEmail = result.email || email;
+      setAuthModalError(result.error || '');
+      setAuthModalSuccess(result.message
+        || 'Check your email for a verification link before signing in.');
+      setAuthResendVisible(emailVerificationEnabled);
+      if (authTab === 'register') setAuthTab('login');
+      return;
+    }
+
     if (!result.ok) {
       setAuthModalError(result.error || 'Could not sign in.');
       return;
     }
+
     const name = result.user.displayName;
     if (elements.playerNameInput) elements.playerNameInput.value = name;
     if (elements.joinModalName) elements.joinModalName.value = name;
@@ -531,6 +574,59 @@ async function handleAuthSubmit() {
     renderGame(game, elements);
   } finally {
     elements.authSubmitBtn.disabled = false;
+  }
+}
+
+async function handleResendVerification() {
+  const email = pendingVerifyEmail || elements.authEmail?.value?.trim();
+  if (!email) {
+    setAuthModalError('Enter the email you used to register.');
+    return;
+  }
+  elements.authResendBtn.disabled = true;
+  setAuthModalError('');
+  try {
+    const result = await auth.resendVerification(email);
+    if (!result.ok) {
+      setAuthModalError(result.error || 'Could not resend verification email.');
+      return;
+    }
+    setAuthModalSuccess(result.message || 'If that account needs verification, a new link has been sent.');
+  } catch {
+    setAuthModalError('Could not resend verification email. Try again later.');
+  } finally {
+    elements.authResendBtn.disabled = false;
+  }
+}
+
+function consumeVerifyTokenFromUrl() {
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get('verify');
+  if (!token) return null;
+  url.searchParams.delete('verify');
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, '', next);
+  return token;
+}
+
+async function handleEmailVerificationFromUrl(token) {
+  try {
+    const result = await auth.verifyEmail(token);
+    if (!result.ok) {
+      showAuthModal('login');
+      setAuthModalError(result.error || 'This verification link is invalid or has expired.');
+      setAuthResendVisible(emailVerificationEnabled);
+      return;
+    }
+    const name = result.user?.displayName || 'Player';
+    if (elements.playerNameInput) elements.playerNameInput.value = name;
+    if (elements.joinModalName) elements.joinModalName.value = name;
+    updateAccountUI();
+    setMessage(elements.message, result.message || `Email verified. Signed in as ${name}.`);
+    renderGame(game, elements);
+  } catch {
+    showAuthModal('login');
+    setAuthModalError('Could not verify email. Try again or request a new link.');
   }
 }
 
@@ -1165,6 +1261,7 @@ elements.authCancelBtn?.addEventListener('click', () => hideAuthModal());
 elements.authForgotBtn?.addEventListener('click', () => {
   showForgotModal(elements.authEmail?.value?.trim() || '');
 });
+elements.authResendBtn?.addEventListener('click', () => handleResendVerification());
 elements.accountSaveBtn?.addEventListener('click', () => handleAccountSave());
 elements.accountCancelBtn?.addEventListener('click', () => hideAccountModal());
 elements.accountDisplayName?.addEventListener('keydown', (e) => {
@@ -1243,8 +1340,15 @@ const roomFromUrl = getRoomFromUrl();
 (async () => {
   accountsEnabled = await auth.checkDbAvailable();
   passwordResetEnabled = await auth.isPasswordResetAvailable();
+  emailVerificationEnabled = await auth.isEmailVerificationAvailable();
   if (accountsEnabled) await auth.initAuth();
   updateAccountUI();
+
+  const verifyToken = consumeVerifyTokenFromUrl();
+  if (verifyToken && accountsEnabled) {
+    await handleEmailVerificationFromUrl(verifyToken);
+    return;
+  }
 
   const resetToken = consumeResetTokenFromUrl();
   if (resetToken && accountsEnabled && passwordResetEnabled) {
