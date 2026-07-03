@@ -32,7 +32,10 @@ const elements = {
   newHandBtn: document.getElementById('btn-new-hand'),
   replayHandBtn: document.getElementById('btn-replay-hand'),
   resetSoloBtn: document.getElementById('btn-reset-solo'),
-  playFriendsBtn: document.getElementById('btn-play-friends'),
+  openTablesBtn: document.getElementById('btn-open-tables'),
+  privateRoomBtn: document.getElementById('btn-private-room'),
+  publicTablesPanel: document.getElementById('public-tables-panel'),
+  privateRoomPanel: document.getElementById('private-room-panel'),
   addBotBtn: document.getElementById('btn-add-bot'),
   removeBotBtn: document.getElementById('btn-remove-bot'),
   botCountLabel: document.getElementById('bot-count'),
@@ -51,8 +54,8 @@ const elements = {
   displayDollarsBtn: document.getElementById('display-dollars'),
   displayBBBtn: document.getElementById('display-bb'),
   stopReplayBtn: document.getElementById('btn-stop-replay'),
-  multiplayerPanel: document.getElementById('multiplayer-panel'),
   publicRoomsList: document.getElementById('public-rooms-list'),
+  publicPlayerNameInput: document.getElementById('public-player-name'),
   lobbyEntry: document.getElementById('lobby-entry'),
   onlineToolbar: document.getElementById('online-toolbar'),
   rebuyBtn: document.getElementById('btn-rebuy'),
@@ -213,8 +216,8 @@ async function joinPublicRoom(roomId) {
   if (!roomId || (inOnlineRoom && game.onlineMode)) return;
   const name = getPlayerName();
   if (!name || name === 'Player') {
-    setMessage(elements.message, 'Enter your name below, then join a table.');
-    elements.playerNameInput?.focus();
+    setMessage(elements.message, 'Enter your name, then join a table.');
+    elements.publicPlayerNameInput?.focus();
     return;
   }
   clearSoloState();
@@ -222,8 +225,8 @@ async function joinPublicRoom(roomId) {
   try {
     await network.joinRoom(roomId, name);
     stopPublicRoomsPolling();
-    game.lobbyPanelOpen = false;
-    elements.multiplayerPanel?.classList.add('hidden');
+    game.lobbyPanelMode = null;
+    hideMultiplayerPanel(elements);
   } catch (err) {
     setMessage(elements.message, err.message || 'Could not join table.');
     refreshPublicRooms();
@@ -397,8 +400,7 @@ async function handleAccountSave() {
       return;
     }
     const name = result.user.displayName;
-    if (elements.playerNameInput) elements.playerNameInput.value = name;
-    if (elements.joinModalName) elements.joinModalName.value = name;
+    syncPlayerNameInputs(name);
     hideAccountModal();
     updateAccountUI();
     setMessage(elements.message, `Display name updated to ${name}.`);
@@ -558,8 +560,7 @@ async function handleAuthSubmit() {
     }
 
     const name = result.user.displayName;
-    if (elements.playerNameInput) elements.playerNameInput.value = name;
-    if (elements.joinModalName) elements.joinModalName.value = name;
+    syncPlayerNameInputs(name);
     hideAuthModal();
     updateAccountUI();
     if (!passwordResetEnabled && authTab === 'register') {
@@ -619,8 +620,7 @@ async function handleEmailVerificationFromUrl(token) {
       return;
     }
     const name = result.user?.displayName || 'Player';
-    if (elements.playerNameInput) elements.playerNameInput.value = name;
-    if (elements.joinModalName) elements.joinModalName.value = name;
+    syncPlayerNameInputs(name);
     updateAccountUI();
     setMessage(elements.message, result.message || `Email verified. Signed in as ${name}.`);
     renderGame(game, elements);
@@ -649,10 +649,7 @@ try {
   if (elements.showBotHandsCheckbox) elements.showBotHandsCheckbox.checked = showBotHandsAtEnd;
   showInBB = localStorage.getItem('poker-show-in-bb') === '1';
   const savedName = localStorage.getItem('poker-player-name');
-  if (savedName) {
-    if (elements.playerNameInput) elements.playerNameInput.value = savedName;
-    if (elements.joinModalName) elements.joinModalName.value = savedName;
-  }
+  if (savedName) syncPlayerNameInputs(savedName);
 } catch { /* ignore */ }
 
 const game = new PokerGame(
@@ -672,7 +669,7 @@ const network = new NetworkClient({
     inOnlineRoom = true;
     game.onlineMode = true;
     game.roomStatus = lobby.status || 'lobby';
-    game.lobbyPanelOpen = false;
+    game.lobbyPanelMode = null;
     game.isHost = lobby.isHost;
     const me = lobby.members.find(m => m.id === network.socket?.id);
     if (me) {
@@ -735,7 +732,7 @@ const network = new NetworkClient({
     game.localSeatIndex = state.localSeatIndex;
     game.localSocketId = network.socket?.id ?? null;
     game.roomStatus = state.status || 'active';
-    game.lobbyPanelOpen = false;
+    game.lobbyPanelMode = null;
     if (state.inviteLink) game.inviteLink = state.inviteLink;
     if (state.message) setMessage(elements.message, state.message);
     renderGame(game, elements);
@@ -749,7 +746,7 @@ const network = new NetworkClient({
     game.isPublicRoom = false;
     game.allowBots = true;
     game.roomDisplayName = '';
-    game.lobbyPanelOpen = false;
+    game.lobbyPanelMode = null;
     game.roomStatus = 'lobby';
     game.tableDetailsOpen = false;
     game.inviteLink = '';
@@ -763,14 +760,24 @@ const network = new NetworkClient({
   },
 });
 
+function syncPlayerNameInputs(name) {
+  if (elements.playerNameInput) elements.playerNameInput.value = name;
+  if (elements.publicPlayerNameInput) elements.publicPlayerNameInput.value = name;
+  if (elements.joinModalName) elements.joinModalName.value = name;
+}
+
 function getPlayerName(fromModal = false) {
-  const raw = fromModal
-    ? elements.joinModalName?.value
-    : elements.playerNameInput?.value;
+  let raw;
+  if (fromModal) {
+    raw = elements.joinModalName?.value;
+  } else if (game.lobbyPanelMode === 'public') {
+    raw = elements.publicPlayerNameInput?.value;
+  } else {
+    raw = elements.playerNameInput?.value;
+  }
   const name = String(raw || 'Player').trim() || 'Player';
   try { localStorage.setItem('poker-player-name', name); } catch { /* ignore */ }
-  if (elements.playerNameInput) elements.playerNameInput.value = name;
-  if (elements.joinModalName) elements.joinModalName.value = name;
+  syncPlayerNameInputs(name);
   return name.slice(0, 16);
 }
 
@@ -897,14 +904,29 @@ elements.resetSoloBtn?.addEventListener('click', () => {
   renderGame(game, elements);
 });
 
-elements.playFriendsBtn?.addEventListener('click', () => {
-  game.lobbyPanelOpen = true;
-  showMultiplayerEntry(elements);
-  startPublicRoomsPolling();
-  setMessage(elements.message, 'Pick an open table or create a private room with friends.');
-  elements.multiplayerPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+function openLobbyPanel(mode) {
+  const nextMode = game.lobbyPanelMode === mode ? null : mode;
+  game.lobbyPanelMode = nextMode;
+  if (nextMode === 'public') {
+    showMultiplayerEntry(elements, 'public');
+    startPublicRoomsPolling();
+    setMessage(elements.message, 'Pick an open table — up to 8 players, join anytime.');
+    elements.publicTablesPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else if (nextMode === 'private') {
+    stopPublicRoomsPolling();
+    showMultiplayerEntry(elements, 'private');
+    setMessage(elements.message, 'Create a private room or join with a friend’s code.');
+    elements.privateRoomPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    stopPublicRoomsPolling();
+    hideMultiplayerPanel(elements);
+    setMessage(elements.message, 'Click "Deal Hand" to play solo, or choose Open Tables / Private Room.');
+  }
   renderGame(game, elements);
-});
+}
+
+elements.openTablesBtn?.addEventListener('click', () => openLobbyPanel('public'));
+elements.privateRoomBtn?.addEventListener('click', () => openLobbyPanel('private'));
 
 elements.publicRoomsList?.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-join-public');
@@ -952,7 +974,7 @@ elements.createRoomBtn.addEventListener('click', async () => {
     game.allowBots = true;
     game.roomDisplayName = '';
     game.roomStatus = 'lobby';
-    game.lobbyPanelOpen = false;
+    game.lobbyPanelMode = null;
     stopPublicRoomsPolling();
     game.localSeatIndex = 0;
     game.tableDetailsOpen = true;
@@ -990,7 +1012,7 @@ elements.joinModalCancel?.addEventListener('click', () => {
   pendingInviteRoomId = null;
   if (elements.joinModalRoomInput) elements.joinModalRoomInput.readOnly = false;
   clearRoomFromUrl();
-  setMessage(elements.message, 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
+  setMessage(elements.message, 'Click "Deal Hand" to play solo, or choose Open Tables / Private Room.');
 });
 
 elements.joinModalName?.addEventListener('keydown', (e) => {
@@ -1074,7 +1096,7 @@ function leaveOnlineRoom() {
   game.isPublicRoom = false;
   game.allowBots = true;
   game.roomDisplayName = '';
-  game.lobbyPanelOpen = false;
+  game.lobbyPanelMode = null;
   game.roomStatus = 'lobby';
   game.tableDetailsOpen = false;
   game.inviteLink = '';
@@ -1364,6 +1386,6 @@ const roomFromUrl = getRoomFromUrl();
   } else {
     setMessage(elements.message, accountsEnabled
       ? 'Click "Deal Hand" to play solo, or sign in to save your game across devices.'
-      : 'Click "Deal Hand" to play solo, or "Play with Friends" to host a room.');
+      : 'Click "Deal Hand" to play solo, or choose Open Tables / Private Room.');
   }
 })();

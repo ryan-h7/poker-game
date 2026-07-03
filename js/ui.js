@@ -320,11 +320,15 @@ export function renderLobby(elements, lobby) {
 }
 
 export function hideMultiplayerPanel(elements) {
-  elements.multiplayerPanel?.classList.add('hidden');
+  elements.publicTablesPanel?.classList.add('hidden');
+  elements.privateRoomPanel?.classList.add('hidden');
 }
 
-export function showMultiplayerEntry(elements) {
-  elements.multiplayerPanel?.classList.remove('hidden');
+export function showMultiplayerEntry(elements, mode = 'private') {
+  const showPublic = mode === 'public';
+  const showPrivate = mode === 'private';
+  elements.publicTablesPanel?.classList.toggle('hidden', !showPublic);
+  elements.privateRoomPanel?.classList.toggle('hidden', !showPrivate);
   elements.lobbyEntry?.classList.remove('hidden');
   elements.lobbyRoomCode && (elements.lobbyRoomCode.textContent = '—');
   elements.lobbyPlayers && (elements.lobbyPlayers.innerHTML = '');
@@ -578,13 +582,13 @@ function renderControls(game, elements) {
     elements.tableDetailsBtn.textContent = open ? 'Hide details' : 'Table details';
   }
 
-  const showFriendsEntry = game.lobbyPanelOpen && !game.onlineMode;
-  if (elements.multiplayerPanel) {
-    elements.multiplayerPanel.classList.toggle('hidden', !showFriendsEntry);
-  }
-  if (elements.playFriendsBtn) {
-    elements.playFriendsBtn.classList.toggle('hidden', game.onlineMode);
-  }
+  const lobbyMode = !game.onlineMode ? game.lobbyPanelMode : null;
+  elements.publicTablesPanel?.classList.toggle('hidden', lobbyMode !== 'public');
+  elements.privateRoomPanel?.classList.toggle('hidden', lobbyMode !== 'private');
+  elements.openTablesBtn?.classList.toggle('hidden', game.onlineMode);
+  elements.privateRoomBtn?.classList.toggle('hidden', game.onlineMode);
+  elements.openTablesBtn?.classList.toggle('active', lobbyMode === 'public');
+  elements.privateRoomBtn?.classList.toggle('active', lobbyMode === 'private');
 
   if (betweenHands) {
     controls.classList.add('hidden');

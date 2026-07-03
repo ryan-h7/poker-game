@@ -138,7 +138,8 @@
       </span>
       <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
       <button id="btn-reset-solo" class="btn btn-reset-solo hidden" type="button">Reset Game</button>
-      <button id="btn-play-friends" class="btn btn-friends" type="button">Multiplayer</button>
+      <button id="btn-open-tables" class="btn btn-open-tables" type="button">Open Tables</button>
+      <button id="btn-private-room" class="btn btn-private-room" type="button">Private Room</button>
       <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled>Replay Hand</button>
       <label class="setup-option">
         <input type="checkbox" id="show-bot-hands">
@@ -146,23 +147,22 @@
       </label>
     </div>
 
-    <div id="multiplayer-panel" class="multiplayer-panel hidden">
-      <h2 class="multiplayer-title">Multiplayer</h2>
-      <section class="public-rooms-section" aria-labelledby="public-rooms-heading">
-        <h3 id="public-rooms-heading" class="public-rooms-heading">Open tables</h3>
-        <p class="public-rooms-sub">Join anytime — up to 8 players. Bot tables fill empty seats; humans-only tables need 2+ players to deal.</p>
-        <div id="public-rooms-list" class="public-rooms-list" role="list"></div>
-      </section>
-      <section class="private-room-section" aria-labelledby="private-room-heading">
-        <h3 id="private-room-heading" class="private-room-heading">Private room</h3>
-        <p class="private-room-sub">Create a room or join with a code from a friend.</p>
-        <div id="lobby-entry" class="lobby-entry">
+    <div id="public-tables-panel" class="multiplayer-panel hidden">
+      <h2 class="multiplayer-title">Open tables</h2>
+      <p class="public-rooms-sub">Join anytime — up to 8 players. Bot tables fill empty seats; humans-only tables need 2+ players to deal.</p>
+      <input type="text" id="public-player-name" class="lobby-input public-player-name" placeholder="Your name" maxlength="16">
+      <div id="public-rooms-list" class="public-rooms-list" role="list"></div>
+    </div>
+
+    <div id="private-room-panel" class="multiplayer-panel hidden">
+      <h2 class="multiplayer-title">Private room</h2>
+      <p class="private-room-sub">Create a room or join with a code from a friend.</p>
+      <div id="lobby-entry" class="lobby-entry">
         <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
         <input type="text" id="join-room-code" class="lobby-input lobby-code-input" placeholder="Room code" maxlength="6" autocapitalize="characters" spellcheck="false">
         <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
         <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join Room</button>
-        </div>
-      </section>
+      </div>
     </div>
 
     <aside class="sidebar">

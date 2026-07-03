@@ -765,25 +765,16 @@ header h1 {
   margin: 0 0 1rem;
 }
 
-.public-rooms-section {
-  margin-bottom: 1.25rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid #30363d;
-}
-
-.public-rooms-heading,
-.private-room-heading {
-  font-size: 0.9rem;
-  color: var(--text);
-  margin: 0 0 0.35rem;
-  font-weight: 600;
-}
-
 .public-rooms-sub,
 .private-room-sub {
   font-size: 0.8rem;
   color: var(--muted);
   margin: 0 0 0.75rem;
+}
+
+.public-player-name {
+  max-width: 16rem;
+  margin-bottom: 0.75rem;
 }
 
 .public-rooms-list {
@@ -859,10 +850,6 @@ header h1 {
   cursor: not-allowed;
 }
 
-.private-room-section {
-  margin-top: 0.25rem;
-}
-
 .multiplayer-header {
   display: flex;
   align-items: center;
@@ -923,15 +910,33 @@ header h1 {
   font-family: inherit;
 }
 
-.btn-friends {
-  background: #1f2d3d;
-  color: #58a6ff;
-  border: 1px solid #58a6ff66;
+.btn-open-tables,
+.btn-private-room {
   font-size: 0.95rem;
   padding: 0.7rem 1rem;
 }
 
-.btn-friends.hidden { display: none; }
+.btn-open-tables {
+  background: #1f2d3d;
+  color: var(--gold);
+  border: 1px solid #d4a84366;
+}
+
+.btn-private-room {
+  background: #1f2d3d;
+  color: #58a6ff;
+  border: 1px solid #58a6ff66;
+}
+
+.btn-open-tables.active,
+.btn-private-room.active {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.btn-open-tables.hidden,
+.btn-private-room.hidden {
+  display: none;
+}
 
 .btn-leave {
   background: transparent;
@@ -1399,7 +1404,8 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .btn-deal,
-  .btn-friends {
+  .btn-open-tables,
+  .btn-private-room {
     font-size: 0.85rem;
     padding: 0.55rem 0.75rem;
   }
