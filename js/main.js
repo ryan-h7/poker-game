@@ -113,6 +113,8 @@ const elements = {
   accountModalError: document.getElementById('account-modal-error'),
   accountSaveBtn: document.getElementById('btn-account-save'),
   accountCancelBtn: document.getElementById('btn-account-cancel'),
+  accountDeletePassword: document.getElementById('account-delete-password'),
+  accountDeleteBtn: document.getElementById('btn-account-delete'),
   forgotModal: document.getElementById('forgot-modal'),
   forgotEmail: document.getElementById('forgot-email'),
   forgotModalError: document.getElementById('forgot-modal-error'),
@@ -378,12 +380,14 @@ function showAccountModal() {
     elements.accountDisplayName.select();
   }
   setModalMessage(elements.accountModalError, '');
+  if (elements.accountDeletePassword) elements.accountDeletePassword.value = '';
   elements.accountModal?.classList.remove('hidden');
 }
 
 function hideAccountModal() {
   elements.accountModal?.classList.add('hidden');
   setModalMessage(elements.accountModalError, '');
+  if (elements.accountDeletePassword) elements.accountDeletePassword.value = '';
 }
 
 async function handleAccountSave() {
@@ -407,6 +411,34 @@ async function handleAccountSave() {
     renderGame(game, elements);
   } finally {
     elements.accountSaveBtn.disabled = false;
+  }
+}
+
+async function handleAccountDelete() {
+  const password = elements.accountDeletePassword?.value || '';
+  if (!password) {
+    setModalMessage(elements.accountModalError, 'Enter your password to delete your account.');
+    return;
+  }
+  if (!window.confirm('Delete your account permanently? Your stats and saved games will be removed and this cannot be undone.')) {
+    return;
+  }
+
+  elements.accountDeleteBtn.disabled = true;
+  try {
+    const result = await auth.deleteAccount(password);
+    if (!result.ok) {
+      setModalMessage(elements.accountModalError, result.error || 'Could not delete account.');
+      return;
+    }
+    clearSoloState();
+    game.soloSessionActive = false;
+    hideAccountModal();
+    updateAccountUI();
+    setMessage(elements.message, 'Your account has been deleted.');
+    renderGame(game, elements);
+  } finally {
+    elements.accountDeleteBtn.disabled = false;
   }
 }
 
@@ -1286,6 +1318,10 @@ elements.authForgotBtn?.addEventListener('click', () => {
 elements.authResendBtn?.addEventListener('click', () => handleResendVerification());
 elements.accountSaveBtn?.addEventListener('click', () => handleAccountSave());
 elements.accountCancelBtn?.addEventListener('click', () => hideAccountModal());
+elements.accountDeleteBtn?.addEventListener('click', () => handleAccountDelete());
+elements.accountDeletePassword?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleAccountDelete();
+});
 elements.accountDisplayName?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleAccountSave();
 });

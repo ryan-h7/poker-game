@@ -11,6 +11,7 @@ import {
   resetPasswordWithToken,
   verifyEmailWithToken,
   resendVerificationEmail,
+  deleteUserAccount,
   getAppBaseUrl,
 } from './auth.js';
 import { query } from './db.js';
@@ -99,6 +100,16 @@ router.patch('/auth/profile', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('profile update error', err);
     res.status(500).json({ ok: false, error: 'Could not update profile.' });
+  }
+});
+
+router.delete('/auth/account', authMiddleware, async (req, res) => {
+  try {
+    const result = await deleteUserAccount(req.user.id, req.body?.password);
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('delete account error', err);
+    res.status(500).json({ ok: false, error: 'Could not delete account.' });
   }
 });
 

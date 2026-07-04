@@ -1524,6 +1524,41 @@ body.invite-join-pending .multiplayer-panel {
   filter: brightness(1.08);
 }
 
+.account-danger-zone {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #30363d;
+}
+
+.account-danger-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f85149;
+  margin-bottom: 0.35rem;
+}
+
+.btn-account-delete {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: transparent;
+  color: #f85149;
+  border: 1px solid #f85149;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-account-delete:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.btn-account-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .display-mode:not(.hidden) {
   margin-left: 0;
 }

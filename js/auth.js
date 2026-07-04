@@ -167,6 +167,16 @@ export async function updateDisplayName(displayName) {
   return data;
 }
 
+export async function deleteAccount(password) {
+  const { data } = await apiFetch('/auth/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  });
+  if (!data.ok) return data;
+  clearSession();
+  return data;
+}
+
 export async function requestPasswordReset(email) {
   const { data } = await apiFetch('/auth/forgot-password', {
     method: 'POST',

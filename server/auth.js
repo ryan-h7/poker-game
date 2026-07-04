@@ -323,6 +323,21 @@ export async function requestPasswordReset(email, appBaseUrl) {
   };
 }
 
+export async function deleteUserAccount(userId, password) {
+  const result = await query(
+    'SELECT id, password_hash FROM users WHERE id = $1',
+    [userId],
+  );
+  const user = result.rows[0];
+  if (!user) return { ok: false, error: 'Account not found.' };
+
+  const valid = await bcrypt.compare(String(password || ''), user.password_hash);
+  if (!valid) return { ok: false, error: 'Incorrect password.' };
+
+  await query('DELETE FROM users WHERE id = $1', [userId]);
+  return { ok: true, message: 'Account deleted.' };
+}
+
 export async function resetPasswordWithToken(token, password) {
   const resetToken = String(token || '').trim();
   if (!resetToken) return { ok: false, error: 'Invalid reset link.' };
