@@ -562,6 +562,21 @@ header h1 {
 
 .btn-reset-solo.hidden { display: none; }
 
+.btn-save-stack {
+  background: var(--gold);
+  color: var(--black);
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.65rem 1.1rem;
+}
+
+.btn-save-stack:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-save-stack.hidden { display: none; }
+
 .message-bar {
   grid-column: 1;
   justify-self: center;

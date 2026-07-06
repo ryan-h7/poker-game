@@ -31,6 +31,7 @@ const elements = {
   raiseHint: document.getElementById('raise-hint'),
   newHandBtn: document.getElementById('btn-new-hand'),
   replayHandBtn: document.getElementById('btn-replay-hand'),
+  saveStackBtn: document.getElementById('btn-save-stack'),
   resetSoloBtn: document.getElementById('btn-reset-solo'),
   openTablesBtn: document.getElementById('btn-open-tables'),
   privateRoomBtn: document.getElementById('btn-private-room'),
@@ -922,6 +923,11 @@ elements.newHandBtn.addEventListener('click', async () => {
 
 elements.replayHandBtn.addEventListener('click', () => game.replayHand());
 elements.stopReplayBtn.addEventListener('click', () => game.stopReplay());
+
+elements.saveStackBtn?.addEventListener('click', () => {
+  if (game.onlineMode || !game.isSoloGameOver()) return;
+  game.saveStackAndRefill();
+});
 
 elements.resetSoloBtn?.addEventListener('click', () => {
   if (game.onlineMode || !game.soloSessionActive) return;

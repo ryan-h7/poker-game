@@ -429,6 +429,66 @@ export class PokerGame {
     return Math.max(0, this.maxRebuys - this.localRebuyCount);
   }
 
+  isSoloGameOver() {
+    if (this.onlineMode || !this.soloSessionActive || this.replaying) return false;
+    if (this.phase !== 'idle' && this.phase !== 'showdown') return false;
+    const human = this.getHumanPlayer();
+    if (!human || human.chips <= 0) return false;
+    const bots = this.players.filter(p => !p.isHuman);
+    if (bots.length === 0) return false;
+    return bots.every(p => p.chips <= 0);
+  }
+
+  soloGameOverMessage() {
+    if (!this.isSoloGameOver()) return null;
+    const human = this.getHumanPlayer();
+    return `You won the table with ${this.formatAmount(human.chips)}! Save your stack to refill bots and keep playing.`;
+  }
+
+  /** Keep human chips, refill bots to starting stack, and continue the solo session. */
+  saveStackAndRefill() {
+    if (!this.isSoloGameOver()) return false;
+    this.clearAiTimer();
+    const human = this.getHumanPlayer();
+    const savedChips = human.chips;
+    const stack = this.startingStack ?? DEFAULT_STARTING_STACK;
+
+    for (const p of this.players) {
+      p.chips = p.isHuman ? savedChips : stack;
+      p.hole = [];
+      p.bet = 0;
+      p.folded = false;
+      p.inHand = true;
+    }
+
+    this.deck = [];
+    this.community = [];
+    this.pot = 0;
+    this.currentBet = 0;
+    this.minRaise = this.bigBlind;
+    this.activeIndex = 0;
+    this.lastRaiser = -1;
+    this.handHistory = [];
+    this.actedThisRound = new Set();
+    this.preflopAggressor = -1;
+    this.bettingLine = createBettingLine();
+    this.humanFoldedPreflop = false;
+    this.fastForward = false;
+    this.handsRevealed = false;
+    this.lastHandReplay = null;
+    this.handSnapshot = null;
+    this.currentHandEvents = null;
+    this.handReadState = null;
+    this.lastHandWinnerIndices = [];
+    this.localRebuyCount = 0;
+    this.phase = 'idle';
+    resetOpponentProfiles(this);
+
+    this.onMessage(`Stack saved at ${this.formatAmount(savedChips)}. Bots refilled — deal the next hand when ready.`);
+    this.onUpdate();
+    return true;
+  }
+
   exportSoloState() {
     if (this.onlineMode || this.replaying || !this.soloSessionActive) return null;
     return {
@@ -1336,7 +1396,7 @@ export class PokerGame {
     const endMessage = winners.length > 1
       ? `Split pot! ${winners.map(w => w.player.name).join(' & ')} win.`
       : `${winners[0].player.name} wins with ${handName(winners[0].score)}!`;
-    this.onMessage(endMessage);
+    this.onMessage(this.soloGameOverMessage() || endMessage);
 
     this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
     markShowdownPlayers(this);
@@ -1358,7 +1418,7 @@ export class PokerGame {
       this.handHistory.push(`${w.name} wins ${this.formatAmount(award)} (others folded)`);
     }
     const endMessage = `${winners[0].name} wins ${this.formatAmount(share)}!`;
-    this.onMessage(endMessage);
+    this.onMessage(this.soloGameOverMessage() || endMessage);
     this.pot = 0;
     this.phase = 'idle';
     this.dealerIndex = (this.dealerIndex + 1) % this.players.length;

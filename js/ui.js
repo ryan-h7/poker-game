@@ -492,7 +492,7 @@ function renderPhase(game, el) {
 function renderControls(game, elements) {
   const {
     controls, foldBtn, checkBtn, callBtn, raiseBtn, raiseSlider, raiseInput,
-    allInBtn, potPresets, raiseHint, newHandBtn, replayHandBtn, resetSoloBtn, bigBlindSelect,
+    allInBtn, potPresets, raiseHint, newHandBtn, saveStackBtn, replayHandBtn, resetSoloBtn, bigBlindSelect,
     startingStackSelect, anteSelect, addBotBtn, removeBotBtn, botCountLabel, tableSizeHint,
     maxRebuysWrap, maxRebuysSelect,
     setupBar, skipBar, skipBtn, displayModeBar, displayDollarsBtn, displayBBBtn,
@@ -602,6 +602,16 @@ function renderControls(game, elements) {
         : 'Deal Hand';
     }
     if (replayHandBtn) replayHandBtn.disabled = !game.canReplayHand();
+    if (saveStackBtn) {
+      const showSave = game.isSoloGameOver();
+      saveStackBtn.classList.toggle('hidden', !showSave);
+      if (showSave) {
+        const human = game.getHumanPlayer();
+        saveStackBtn.textContent = human
+          ? `Save Stack (${game.formatAmount(human.chips)})`
+          : 'Save Stack';
+      }
+    }
     if (resetSoloBtn) {
       const showReset = !game.onlineMode && game.soloSessionActive && betweenHands;
       resetSoloBtn.classList.toggle('hidden', !showReset);
