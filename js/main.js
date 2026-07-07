@@ -33,6 +33,9 @@ const elements = {
   replayHandBtn: document.getElementById('btn-replay-hand'),
   saveStackBtn: document.getElementById('btn-save-stack'),
   resetSoloBtn: document.getElementById('btn-reset-solo'),
+  resetSoloModal: document.getElementById('reset-solo-modal'),
+  resetSoloConfirmBtn: document.getElementById('btn-reset-solo-confirm'),
+  resetSoloCancelBtn: document.getElementById('btn-reset-solo-cancel'),
   openTablesBtn: document.getElementById('btn-open-tables'),
   privateRoomBtn: document.getElementById('btn-private-room'),
   publicTablesPanel: document.getElementById('public-tables-panel'),
@@ -91,6 +94,10 @@ const elements = {
   authModal: document.getElementById('auth-modal'),
   authEmail: document.getElementById('auth-email'),
   authPassword: document.getElementById('auth-password'),
+  authPasswordToggle: document.getElementById('btn-auth-password-toggle'),
+  authConfirmPasswordWrap: document.getElementById('auth-confirm-password-wrap'),
+  authPasswordConfirm: document.getElementById('auth-password-confirm'),
+  authPasswordConfirmToggle: document.getElementById('btn-auth-password-confirm-toggle'),
   authDisplayName: document.getElementById('auth-display-name'),
   authDisplayNameLabel: document.querySelector('.auth-display-name-label'),
   authDisplayNameHint: document.getElementById('auth-display-name-hint'),
@@ -332,6 +339,27 @@ function setAuthResendVisible(visible) {
   elements.authResendWrap?.classList.toggle('hidden', !visible);
 }
 
+function setPasswordFieldVisible(input, toggleBtn, visible) {
+  if (!input) return;
+  input.type = visible ? 'text' : 'password';
+  if (toggleBtn) {
+    toggleBtn.textContent = visible ? 'Hide' : 'Show';
+    toggleBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+  }
+}
+
+function resetPasswordFieldVisibility() {
+  setPasswordFieldVisible(elements.authPassword, elements.authPasswordToggle, false);
+  setPasswordFieldVisible(elements.authPasswordConfirm, elements.authPasswordConfirmToggle, false);
+}
+
+function bindPasswordToggle(input, toggleBtn) {
+  toggleBtn?.addEventListener('click', () => {
+    if (!input) return;
+    setPasswordFieldVisible(input, toggleBtn, input.type === 'password');
+  });
+}
+
 function updateAuthResetUI() {
   const isRegister = authTab === 'register';
   const showForgot = !isRegister && passwordResetEnabled;
@@ -353,6 +381,8 @@ function setAuthTab(tab) {
   elements.authDisplayName?.classList.toggle('hidden', !isRegister);
   elements.authDisplayNameLabel?.classList.toggle('hidden', !isRegister);
   elements.authDisplayNameHint?.classList.toggle('hidden', !isRegister);
+  elements.authConfirmPasswordWrap?.classList.toggle('hidden', !isRegister);
+  if (!isRegister && elements.authPasswordConfirm) elements.authPasswordConfirm.value = '';
   setAuthModalError('');
   if (isRegister) {
     setAuthModalSuccess('');
@@ -558,6 +588,8 @@ function hideAuthModal() {
   setAuthModalError('');
   setAuthModalSuccess('');
   setAuthResendVisible(false);
+  resetPasswordFieldVisibility();
+  if (elements.authPasswordConfirm) elements.authPasswordConfirm.value = '';
 }
 
 async function handleAuthSubmit() {
@@ -567,6 +599,17 @@ async function handleAuthSubmit() {
   if (!email || !password) {
     setAuthModalError('Enter your email and password.');
     return;
+  }
+  if (authTab === 'register') {
+    const confirmPassword = elements.authPasswordConfirm?.value || '';
+    if (!confirmPassword) {
+      setAuthModalError('Confirm your password.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setAuthModalError('Passwords do not match.');
+      return;
+    }
   }
   elements.authSubmitBtn.disabled = true;
   setAuthModalError('');
@@ -929,17 +972,35 @@ elements.saveStackBtn?.addEventListener('click', () => {
   game.saveStackAndRefill();
 });
 
-elements.resetSoloBtn?.addEventListener('click', () => {
+function showResetSoloModal() {
   if (game.onlineMode || !game.soloSessionActive) return;
-  const ok = window.confirm(
-    'Reset the game? Chip stacks, dealer position, and hand history will be cleared.',
-  );
-  if (!ok) return;
+  elements.resetSoloModal?.classList.remove('hidden');
+}
+
+function hideResetSoloModal() {
+  elements.resetSoloModal?.classList.add('hidden');
+}
+
+function performSoloReset() {
   game.resetSoloSession();
   clearSoloState();
   if (auth.isLoggedIn()) auth.clearSoloGame();
+  hideResetSoloModal();
   setMessage(elements.message, 'Game reset. Click "Deal Hand" to start fresh.');
   renderGame(game, elements);
+  elements.setupBar?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+elements.resetSoloBtn?.addEventListener('click', () => {
+  showResetSoloModal();
+});
+elements.resetSoloConfirmBtn?.addEventListener('click', () => {
+  if (game.onlineMode || !game.soloSessionActive) return;
+  performSoloReset();
+});
+elements.resetSoloCancelBtn?.addEventListener('click', () => hideResetSoloModal());
+elements.resetSoloModal?.addEventListener('click', (e) => {
+  if (e.target === elements.resetSoloModal) hideResetSoloModal();
 });
 
 function openLobbyPanel(mode) {
@@ -1318,6 +1379,11 @@ elements.authTabLogin?.addEventListener('click', () => setAuthTab('login'));
 elements.authTabRegister?.addEventListener('click', () => setAuthTab('register'));
 elements.authSubmitBtn?.addEventListener('click', () => handleAuthSubmit());
 elements.authCancelBtn?.addEventListener('click', () => hideAuthModal());
+bindPasswordToggle(elements.authPassword, elements.authPasswordToggle);
+bindPasswordToggle(elements.authPasswordConfirm, elements.authPasswordConfirmToggle);
+elements.authPasswordConfirm?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleAuthSubmit();
+});
 elements.authForgotBtn?.addEventListener('click', () => {
   showForgotModal(elements.authEmail?.value?.trim() || '');
 });

@@ -136,9 +136,11 @@
           <option value="-1">Unlimited</option>
         </select>
       </span>
-      <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
-      <button id="btn-save-stack" class="btn btn-save-stack hidden" type="button">Save Stack</button>
-      <button id="btn-reset-solo" class="btn btn-reset-solo hidden" type="button">Reset Game</button>
+      <div class="setup-actions">
+        <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
+        <button id="btn-save-stack" class="btn btn-save-stack hidden" type="button">Save Stack</button>
+        <button id="btn-reset-solo" class="btn btn-reset-solo hidden" type="button">Reset Game</button>
+      </div>
       <button id="btn-open-tables" class="btn btn-open-tables" type="button">Open Tables</button>
       <button id="btn-private-room" class="btn btn-private-room" type="button">Private Room</button>
       <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled>Replay Hand</button>
@@ -195,7 +197,17 @@
       <label class="join-modal-label" for="auth-email">Email</label>
       <input type="email" id="auth-email" class="join-modal-input" autocomplete="email" inputmode="email">
       <label class="join-modal-label" for="auth-password">Password</label>
-      <input type="password" id="auth-password" class="join-modal-input" autocomplete="current-password" minlength="8">
+      <div class="password-field-wrap">
+        <input type="password" id="auth-password" class="join-modal-input join-modal-input-password" autocomplete="current-password" minlength="8">
+        <button type="button" id="btn-auth-password-toggle" class="btn-password-toggle" aria-label="Show password">Show</button>
+      </div>
+      <div id="auth-confirm-password-wrap" class="auth-confirm-password-wrap hidden">
+        <label class="join-modal-label" for="auth-password-confirm">Confirm password</label>
+        <div class="password-field-wrap">
+          <input type="password" id="auth-password-confirm" class="join-modal-input join-modal-input-password" autocomplete="new-password" minlength="8">
+          <button type="button" id="btn-auth-password-confirm-toggle" class="btn-password-toggle" aria-label="Show password">Show</button>
+        </div>
+      </div>
       <p id="auth-password-hint" class="join-modal-hint auth-password-hint hidden">Use at least 8 characters. You can reset your password by email if you forget it.</p>
       <p id="auth-verify-hint" class="join-modal-hint auth-verify-hint hidden">We'll email you a verification link. You must confirm your email before signing in.</p>
       <p id="auth-forgot-wrap" class="auth-forgot-wrap">
@@ -267,6 +279,17 @@
       <div class="join-modal-actions">
         <button id="btn-reset-submit" class="btn btn-join-modal" type="button">Update password</button>
         <button id="btn-reset-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="reset-solo-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="reset-solo-modal-title">
+    <div class="join-modal-card">
+      <h2 id="reset-solo-modal-title">Reset game?</h2>
+      <p class="join-modal-sub">Chip stacks, dealer position, and hand history will be cleared. This cannot be undone.</p>
+      <div class="join-modal-actions">
+        <button id="btn-reset-solo-confirm" class="btn btn-join-modal btn-reset-solo-confirm" type="button">Reset game</button>
+        <button id="btn-reset-solo-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
       </div>
     </div>
   </div>

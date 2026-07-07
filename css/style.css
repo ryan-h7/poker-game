@@ -577,6 +577,15 @@ header h1 {
 
 .btn-save-stack.hidden { display: none; }
 
+.btn-reset-solo-confirm {
+  background: #f85149;
+  color: #fff;
+}
+
+.btn-reset-solo-confirm:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
 .message-bar {
   grid-column: 1;
   justify-self: center;
@@ -690,6 +699,15 @@ header h1 {
 }
 
 .setup-bar.hidden { display: none; }
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1 1 100%;
+  justify-content: center;
+  align-items: stretch;
+}
 
 .setup-label {
   font-size: 0.85rem;
@@ -1179,6 +1197,40 @@ header h1 {
   cursor: default;
 }
 
+.password-field-wrap {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
+.password-field-wrap .join-modal-input-password {
+  width: 100%;
+  padding-right: 4.25rem;
+}
+
+.btn-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.45rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn-password-toggle:hover {
+  text-decoration: underline;
+}
+
+.auth-confirm-password-wrap.hidden {
+  display: none;
+}
+
 .join-modal-error {
   color: #f85149;
   font-size: 0.85rem;
@@ -1407,6 +1459,24 @@ body.invite-join-pending .multiplayer-panel {
   .setup-bar {
     gap: 0.4rem;
     justify-content: center;
+  }
+
+  .setup-actions {
+    gap: 0.4rem;
+  }
+
+  .setup-actions .btn-deal,
+  .setup-actions .btn-save-stack,
+  .setup-actions .btn-reset-solo {
+    flex: 1 1 calc(50% - 0.2rem);
+    min-height: 44px;
+    font-size: 0.85rem;
+    padding: 0.55rem 0.75rem;
+    touch-action: manipulation;
+  }
+
+  .setup-actions .btn-deal {
+    flex-basis: 100%;
   }
 
   .setup-label {
