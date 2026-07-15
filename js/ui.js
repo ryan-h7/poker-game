@@ -1,6 +1,5 @@
 import { SUIT_COLORS } from './engine.js';
 import { profileToHudSummary } from './opponent.js';
-import { shouldShowPromo, getActivePromoTip } from './promo.js';
 
 export const POT_BET_PRESETS = [0.25, 0.33, 0.5, 0.66, 0.75, 1, 1.25];
 
@@ -359,26 +358,6 @@ export function buildTableInfo(game) {
   };
 }
 
-export function renderPromoSuggest(game, elements) {
-  const bar = elements.promoSuggest;
-  if (!bar) return;
-
-  const show = shouldShowPromo(game);
-  bar.classList.toggle('hidden', !show);
-  if (!show) return;
-
-  const tip = getActivePromoTip({ gameOver: game.isSoloGameOver() });
-  if (elements.promoSuggestText) elements.promoSuggestText.textContent = tip.text;
-  if (elements.promoPrimaryBtn) {
-    elements.promoPrimaryBtn.textContent = tip.primary.label;
-    elements.promoPrimaryBtn.dataset.action = tip.primary.action;
-  }
-  if (elements.promoSecondaryBtn) {
-    elements.promoSecondaryBtn.textContent = tip.secondary.label;
-    elements.promoSecondaryBtn.dataset.action = tip.secondary.action;
-  }
-}
-
 export function renderGame(game, elements) {
   document.body.classList.toggle('layout-portrait', isPortraitTable());
   renderCommunity(game, elements.community);
@@ -387,7 +366,6 @@ export function renderGame(game, elements) {
   renderControls(game, elements);
   renderLog(game, elements.log, elements.message);
   renderPhase(game, elements.phase);
-  renderPromoSuggest(game, elements);
   const tableInfo = buildTableInfo(game);
   if (tableInfo) renderTableDetails(elements, tableInfo);
   if (elements.stopReplayBtn) {

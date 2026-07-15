@@ -596,89 +596,6 @@ header h1 {
   order: 5;
 }
 
-.promo-suggest {
-  grid-column: 1;
-  justify-self: center;
-  width: min(100%, 520px);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem 0.75rem;
-  padding: 0.55rem 0.75rem;
-  margin: 0.15rem 0;
-  background: linear-gradient(135deg, rgba(212, 168, 67, 0.12), rgba(22, 27, 34, 0.9));
-  border: 1px solid #3d4654;
-  border-radius: 10px;
-  order: 5;
-}
-
-.promo-suggest.hidden {
-  display: none;
-}
-
-.promo-suggest-text {
-  flex: 1 1 220px;
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text);
-  line-height: 1.35;
-  text-align: left;
-}
-
-.promo-suggest-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn-promo-primary,
-.btn-promo-secondary {
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.4rem 0.7rem;
-  border-radius: 8px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.btn-promo-primary {
-  background: var(--gold);
-  color: var(--black);
-  border: none;
-}
-
-.btn-promo-primary:hover {
-  filter: brightness(1.08);
-}
-
-.btn-promo-secondary {
-  background: transparent;
-  color: var(--gold);
-  border: 1px solid #d4a84366;
-}
-
-.btn-promo-secondary:hover {
-  border-color: var(--gold);
-}
-
-.btn-promo-dismiss {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 1.15rem;
-  line-height: 1;
-  padding: 0.2rem 0.35rem;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.btn-promo-dismiss:hover {
-  color: var(--text);
-}
-
 .online-toolbar {
   grid-column: 1;
   justify-self: center;
@@ -1537,28 +1454,6 @@ body.invite-join-pending .multiplayer-panel {
     font-size: 0.85rem;
     min-height: 1.2rem;
     padding: 0.35rem;
-  }
-
-  .promo-suggest {
-    width: 100%;
-    padding: 0.5rem 0.65rem;
-  }
-
-  .promo-suggest-text {
-    flex-basis: 100%;
-    font-size: 0.8rem;
-    text-align: center;
-  }
-
-  .promo-suggest-actions {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .btn-promo-primary,
-  .btn-promo-secondary {
-    min-height: 40px;
-    flex: 1 1 auto;
   }
 
   .setup-bar {
