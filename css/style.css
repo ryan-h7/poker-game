@@ -1274,6 +1274,11 @@ header h1 {
 
 body.modal-open { overflow: hidden; }
 
+body.modal-open .promo-suggest,
+body.invite-join-pending .promo-suggest {
+  display: none;
+}
+
 body.invite-join-pending .setup-bar,
 body.invite-join-pending .multiplayer-panel {
   display: none;
@@ -1758,3 +1763,130 @@ body.invite-join-pending .multiplayer-panel {
 
 #stat-profit.positive { color: #3fb950; }
 #stat-profit.negative { color: #f85149; }
+
+/* Corner invite / share tip — stays out of the table flow */
+.promo-suggest {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+  width: min(240px, calc(100vw - 1.5rem));
+  padding: 0.85rem 1rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid #3d4654;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: promo-in 0.28s ease-out;
+}
+
+.promo-suggest.hidden {
+  display: none;
+}
+
+@keyframes promo-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.promo-suggest-title {
+  margin: 0 1.4rem 0.25rem 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+.promo-suggest-text {
+  margin: 0 0 0.7rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.promo-suggest-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.btn-promo-primary,
+.btn-promo-secondary {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+  min-height: 36px;
+}
+
+.btn-promo-primary {
+  background: var(--gold);
+  color: var(--black);
+  border: none;
+}
+
+.btn-promo-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-promo-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid #30363d;
+}
+
+.btn-promo-secondary:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.btn-promo-dismiss {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.2rem 0.35rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-promo-dismiss:hover {
+  color: var(--text);
+}
+
+@media (min-width: 769px) {
+  .promo-suggest {
+    /* Right side is the action-log sidebar on desktop */
+    right: auto;
+    left: 1rem;
+    bottom: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .promo-suggest {
+    right: 0.65rem;
+    left: auto;
+    bottom: 0.65rem;
+    width: min(220px, calc(100vw - 1.3rem));
+  }
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .promo-suggest {
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
