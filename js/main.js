@@ -9,7 +9,11 @@ import { NetworkClient, getRoomFromUrl, clearRoomFromUrl, normalizeRoomCode, loa
 import * as auth from './auth.js';
 import {
   copyOrShareLink, shareLink, primeLinkInput, canNativeShare, isMobileDevice,
+  copyToClipboard,
 } from './clipboard.js';
+import {
+  dismissPromo, clearActivePromoTip, getShareCopy, getAppShareUrl,
+} from './promo.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -18,6 +22,11 @@ const elements = {
   phase: document.getElementById('phase'),
   log: document.getElementById('log'),
   message: document.getElementById('message'),
+  promoSuggest: document.getElementById('promo-suggest'),
+  promoSuggestText: document.getElementById('promo-suggest-text'),
+  promoPrimaryBtn: document.getElementById('btn-promo-primary'),
+  promoSecondaryBtn: document.getElementById('btn-promo-secondary'),
+  promoDismissBtn: document.getElementById('btn-promo-dismiss'),
   controls: document.getElementById('controls'),
   foldBtn: document.getElementById('btn-fold'),
   checkBtn: document.getElementById('btn-check'),
@@ -1026,6 +1035,67 @@ function openLobbyPanel(mode) {
 
 elements.openTablesBtn?.addEventListener('click', () => openLobbyPanel('public'));
 elements.privateRoomBtn?.addEventListener('click', () => openLobbyPanel('private'));
+
+async function handlePromoAction(action) {
+  if (!action) return;
+  if (action === 'invite') {
+    dismissPromo();
+    openLobbyPanel('private');
+    setMessage(elements.message, 'Create a private room, then share the invite link with friends.');
+    return;
+  }
+  if (action === 'open') {
+    dismissPromo();
+    openLobbyPanel('public');
+    return;
+  }
+  if (action === 'share') {
+    const { title, text, url } = getShareCopy();
+    if (await shareLink(url, title, text)) {
+      setMessage(elements.message, 'Thanks for sharing Poker Games Club!');
+      dismissPromo();
+      clearActivePromoTip();
+      renderGame(game, elements);
+      return;
+    }
+    const result = await copyOrShareLink(url, title);
+    if (result === 'copy') {
+      setMessage(elements.message, 'Link copied — paste it anywhere to invite friends.');
+      dismissPromo();
+      clearActivePromoTip();
+      renderGame(game, elements);
+      return;
+    }
+    // Fallback: open X intent
+    const tweet = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${text} ${url}`)}`;
+    window.open(tweet, '_blank', 'noopener,noreferrer');
+    setMessage(elements.message, 'Opened a share draft — tweak it and post.');
+    return;
+  }
+  if (action === 'copy') {
+    const url = getAppShareUrl();
+    if (await copyToClipboard(url)) {
+      setMessage(elements.message, 'Site link copied. Send it to a friend!');
+      dismissPromo();
+      clearActivePromoTip();
+      renderGame(game, elements);
+      return;
+    }
+    setMessage(elements.message, `Copy this link: ${url}`);
+  }
+}
+
+elements.promoPrimaryBtn?.addEventListener('click', () => {
+  handlePromoAction(elements.promoPrimaryBtn.dataset.action);
+});
+elements.promoSecondaryBtn?.addEventListener('click', () => {
+  handlePromoAction(elements.promoSecondaryBtn.dataset.action);
+});
+elements.promoDismissBtn?.addEventListener('click', () => {
+  dismissPromo();
+  clearActivePromoTip();
+  renderGame(game, elements);
+});
 
 elements.publicRoomsList?.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-join-public');

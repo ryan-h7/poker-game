@@ -45,10 +45,12 @@ export async function copyToClipboard(text) {
 }
 
 /** Native share sheet (mobile). Must run inside a user gesture. */
-export async function shareLink(url, title = 'Join my poker game') {
+export async function shareLink(url, title = 'Join my poker game', text = '') {
   if (!canNativeShare()) return false;
   try {
-    await navigator.share({ title, url });
+    const payload = { title, url };
+    if (text) payload.text = text;
+    await navigator.share(payload);
     return true;
   } catch (err) {
     if (err?.name === 'AbortError') return false;
