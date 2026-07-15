@@ -120,9 +120,9 @@ export async function registerUser({ email, password, displayName }, appBaseUrl)
 
     if (requireEmail) {
       const sent = await sendUserVerificationEmail(user, appBaseUrl);
-      if (!sent) {
+      if (!sent?.ok) {
         await query('DELETE FROM users WHERE id = $1', [user.id]);
-        return { ok: false, error: 'Could not send verification email. Try again later.' };
+        return { ok: false, error: sent?.error || 'Could not send verification email. Try again later.' };
       }
       return {
         ok: true,
@@ -198,8 +198,8 @@ export async function resendVerificationEmail(email, appBaseUrl) {
   }
 
   const sent = await sendUserVerificationEmail(user, appBaseUrl);
-  if (!sent) {
-    return { ok: false, error: 'Could not send verification email. Try again later.' };
+  if (!sent?.ok) {
+    return { ok: false, error: sent?.error || 'Could not send verification email. Try again later.' };
   }
 
   return {
@@ -313,8 +313,8 @@ export async function requestPasswordReset(email, appBaseUrl) {
 
   const resetUrl = `${appBaseUrl}/?reset=${token}`;
   const sent = await sendPasswordResetEmail({ to: normalizedEmail, resetUrl });
-  if (!sent) {
-    return { ok: false, error: 'Could not send reset email. Try again later.' };
+  if (!sent?.ok) {
+    return { ok: false, error: sent?.error || 'Could not send reset email. Try again later.' };
   }
 
   return {

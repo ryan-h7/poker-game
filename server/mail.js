@@ -21,10 +21,37 @@ function linkButton(url, label) {
   `;
 }
 
+function friendlyResendError(status, bodyText) {
+  let message = '';
+  try {
+    message = JSON.parse(bodyText || '{}').message || '';
+  } catch {
+    message = String(bodyText || '').slice(0, 200);
+  }
+
+  const lower = message.toLowerCase();
+  if (lower.includes('only send testing emails') || lower.includes('verify a domain')) {
+    return 'Email sending is still in test mode. Verify pokergamesclub.com in Resend (Domains) and set RESEND_FROM to an address on that domain.';
+  }
+  if (lower.includes('not verified') || lower.includes('domain is not verified')) {
+    return 'Sending domain is not verified in Resend. Add and verify pokergamesclub.com, then use an address like noreply@pokergamesclub.com as RESEND_FROM.';
+  }
+  if (lower.includes('invalid') && lower.includes('from')) {
+    return 'RESEND_FROM is invalid. Use a verified address like "Poker Games Club <noreply@pokergamesclub.com>".';
+  }
+  if (status === 401 || status === 403) {
+    return 'Email provider rejected the request. Check RESEND_API_KEY and that your Resend domain is verified.';
+  }
+  if (message) return `Could not send email: ${message}`;
+  return 'Could not send verification email. Try again later.';
+}
+
 async function sendEmail({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
-  if (!apiKey || !from) return false;
+  if (!apiKey || !from) {
+    return { ok: false, error: 'Email is not configured on this server.' };
+  }
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -37,9 +64,10 @@ async function sendEmail({ to, subject, html }) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    console.error('Resend email failed:', res.status, text);
+    console.error('Resend email failed:', res.status, text, { from, to });
+    return { ok: false, error: friendlyResendError(res.status, text) };
   }
-  return res.ok;
+  return { ok: true };
 }
 
 export async function sendPasswordResetEmail({ to, resetUrl }) {
