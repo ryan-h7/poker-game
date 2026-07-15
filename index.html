@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Texas Hold'em Poker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Poker Games Club</title>
+  <meta name="description" content="Free Texas Hold'em — play solo vs bots or with friends online.">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Poker Club">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -185,6 +194,12 @@
       <div id="log" class="log"></div>
     </aside>
   </div>
+
+  <aside id="pwa-install" class="pwa-install hidden" role="complementary" aria-label="Install app">
+    <button type="button" id="btn-pwa-dismiss" class="btn-pwa-dismiss" aria-label="Dismiss">×</button>
+    <p id="pwa-install-text" class="pwa-install-text">Install Poker Games Club on your home screen.</p>
+    <button type="button" id="btn-pwa-install" class="btn btn-pwa-install">Install</button>
+  </aside>
 
   <aside id="promo-suggest" class="promo-suggest hidden" role="complementary" aria-label="Invite friends">
     <button type="button" id="btn-promo-dismiss" class="btn-promo-dismiss" aria-label="Dismiss">×</button>

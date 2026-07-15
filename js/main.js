@@ -14,6 +14,7 @@ import {
 import {
   dismissPromo, clearActivePromoTip, getShareCopy, getAppShareUrl,
 } from './promo.js';
+import { initPwa } from './pwa.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -1537,6 +1538,7 @@ async function tryRestoreOnlineSession() {
 }
 
 const roomFromUrl = getRoomFromUrl();
+initPwa();
 (async () => {
   accountsEnabled = await auth.checkDbAvailable();
   passwordResetEnabled = await auth.isPasswordResetAvailable();

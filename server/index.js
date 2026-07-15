@@ -20,6 +20,15 @@ const io = new Server(httpServer, {
 const rooms = new RoomManager(io);
 
 app.use(express.json({ limit: '512kb' }));
+app.get('/sw.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(rootDir, 'sw.js'));
+});
+app.get('/manifest.webmanifest', (_req, res) => {
+  res.type('application/manifest+json');
+  res.sendFile(path.join(rootDir, 'manifest.webmanifest'));
+});
 app.get('/api/public-rooms', (_, res) => {
   res.json({ ok: true, rooms: rooms.listPublicRooms() });
 });
