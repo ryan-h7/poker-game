@@ -20,18 +20,29 @@
 <body>
   <div class="app">
     <header>
-      <h1>Texas Hold'em</h1>
-      <span id="phase" class="phase-badge">Ready</span>
+      <h1 data-i18n="app.title">Texas Hold'em</h1>
+      <span id="phase" class="phase-badge" data-i18n="phase.ready">Ready</span>
+      <div class="lang-menu" id="lang-menu">
+        <button type="button" id="btn-lang" class="btn btn-lang" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria="lang.aria">
+          <span data-i18n="lang.menu">Language</span>
+          <span id="lang-current" class="lang-current">EN</span>
+        </button>
+        <ul id="lang-options" class="lang-options hidden" role="listbox" aria-label="Language">
+          <li><button type="button" class="lang-option" data-lang="en" role="option">English</button></li>
+          <li><button type="button" class="lang-option" data-lang="fr" role="option">Français</button></li>
+          <li><button type="button" class="lang-option" data-lang="zh" role="option">中文</button></li>
+        </ul>
+      </div>
       <div id="account-bar" class="account-bar hidden">
         <button id="account-user" class="account-user hidden" type="button" title="Edit display name"></button>
-        <button id="btn-account" class="btn btn-account" type="button">Sign in</button>
-        <button id="btn-logout" class="btn btn-account-outline hidden" type="button">Log out</button>
+        <button id="btn-account" class="btn btn-account" type="button" data-i18n="account.signIn">Sign in</button>
+        <button id="btn-logout" class="btn btn-account-outline hidden" type="button" data-i18n="account.logOut">Log out</button>
       </div>
       <div id="display-mode" class="display-mode hidden" role="group" aria-label="Amount display">
         <button type="button" id="display-dollars" class="display-mode-btn active">$</button>
         <button type="button" id="display-bb" class="display-mode-btn">BB</button>
       </div>
-      <button id="btn-stop-replay" class="btn btn-stop-replay hidden" type="button">Stop Replay</button>
+      <button id="btn-stop-replay" class="btn btn-stop-replay hidden" type="button" data-i18n="controls.stopReplay">Stop Replay</button>
     </header>
 
     <div class="table-area">
@@ -47,14 +58,14 @@
     <div id="message" class="message-bar"></div>
 
     <div id="online-toolbar" class="online-toolbar hidden">
-      <button id="btn-rebuy" class="btn btn-rebuy hidden" type="button">Rebuy</button>
-      <button id="btn-table-details" class="btn btn-table-details" type="button" aria-expanded="false">Table details</button>
-      <button id="btn-leave-session" class="btn btn-leave" type="button">Leave table</button>
+      <button id="btn-rebuy" class="btn btn-rebuy hidden" type="button" data-i18n="table.rebuy">Rebuy</button>
+      <button id="btn-table-details" class="btn btn-table-details" type="button" aria-expanded="false" data-i18n="table.details">Table details</button>
+      <button id="btn-leave-session" class="btn btn-leave" type="button" data-i18n="table.leave">Leave table</button>
     </div>
 
     <div id="table-details-panel" class="table-details-panel hidden">
       <div class="table-details-header">
-        <h2>Table details</h2>
+        <h2 data-i18n="table.details">Table details</h2>
         <button id="btn-close-table-details" class="btn-close-details" type="button" aria-label="Close table details">×</button>
       </div>
       <p class="lobby-hint" id="lobby-hint">Share the link with friends.</p>
@@ -62,25 +73,25 @@
       <div class="lobby-code">Table: <strong id="lobby-room-code">—</strong></div>
       <div id="invite-row" class="invite-row">
         <input type="text" id="invite-link" class="invite-link" readonly inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <button id="btn-copy-link" class="btn btn-copy" type="button">Copy Link</button>
-        <button id="btn-share-link" class="btn btn-share hidden" type="button">Share</button>
+        <button id="btn-copy-link" class="btn btn-copy" type="button" data-i18n="table.copyLink">Copy Link</button>
+        <button id="btn-share-link" class="btn btn-share hidden" type="button" data-i18n="table.share">Share</button>
       </div>
       <ul id="lobby-players" class="lobby-players"></ul>
     </div>
 
     <div id="skip-bar" class="skip-bar hidden">
-      <button id="btn-skip" class="btn btn-skip" type="button">Skip to end</button>
+      <button id="btn-skip" class="btn btn-skip" type="button" data-i18n="controls.skip">Skip to end</button>
       <label class="skip-auto">
         <input type="checkbox" id="auto-skip">
-        Auto-skip when folded pre-flop
+        <span data-i18n="controls.autoSkip">Auto-skip when folded pre-flop</span>
       </label>
     </div>
 
     <div id="controls" class="controls hidden">
       <div class="action-row">
-        <button id="btn-fold" class="btn btn-fold">Fold</button>
-        <button id="btn-check" class="btn btn-check">Check</button>
-        <button id="btn-call" class="btn btn-call">Call</button>
+        <button id="btn-fold" class="btn btn-fold" data-i18n="controls.fold">Fold</button>
+        <button id="btn-check" class="btn btn-check" data-i18n="controls.check">Check</button>
+        <button id="btn-call" class="btn btn-call" data-i18n="controls.call">Call</button>
       </div>
       <div class="raise-panel">
         <div class="pot-presets" id="pot-presets">
@@ -93,25 +104,25 @@
           <button type="button" class="btn-preset" data-pct="1.25">125%</button>
         </div>
         <div class="raise-adjust">
-          <label class="raise-input-label" for="raise-input" id="raise-input-label">Raise to $</label>
+          <label class="raise-input-label" for="raise-input" id="raise-input-label" data-i18n="controls.raiseToDollar">Raise to $</label>
           <input type="number" id="raise-input" class="raise-input" min="0" step="1" inputmode="numeric">
           <input type="range" id="raise-slider" min="0" max="1000" value="40" aria-label="Raise amount slider">
-          <button id="btn-raise" class="btn btn-raise">Raise</button>
-          <button id="btn-allin" class="btn btn-allin" type="button">All-In</button>
+          <button id="btn-raise" class="btn btn-raise" data-i18n="controls.raise">Raise</button>
+          <button id="btn-allin" class="btn btn-allin" type="button" data-i18n="controls.allIn">All-In</button>
         </div>
         <span id="raise-hint" class="raise-hint"></span>
       </div>
     </div>
 
     <div id="setup-bar" class="setup-bar">
-      <div class="bot-stepper" aria-label="Bot count">
-        <span class="setup-label">Bots</span>
-        <button id="btn-remove-bot" class="btn-stepper" type="button" aria-label="Remove bot">−</button>
+      <div class="bot-stepper" data-i18n-aria="setup.bots">
+        <span class="setup-label" data-i18n="setup.bots">Bots</span>
+        <button id="btn-remove-bot" class="btn-stepper" type="button" data-i18n-aria="setup.removeBot">−</button>
         <span id="bot-count" class="bot-count">3</span>
-        <button id="btn-add-bot" class="btn-stepper" type="button" aria-label="Add bot">+</button>
+        <button id="btn-add-bot" class="btn-stepper" type="button" data-i18n-aria="setup.addBot">+</button>
       </div>
       <span id="table-size-hint" class="setup-hint">4 players</span>
-      <label class="setup-label" for="starting-stack">Stack</label>
+      <label class="setup-label" for="starting-stack" data-i18n="setup.stack">Stack</label>
       <select id="starting-stack" class="setup-select">
         <option value="500">$500</option>
         <option value="1000" selected>$1,000</option>
@@ -119,7 +130,7 @@
         <option value="5000">$5,000</option>
         <option value="10000">$10,000</option>
       </select>
-      <label class="setup-label" for="big-blind">Big Blind</label>
+      <label class="setup-label" for="big-blind" data-i18n="setup.bigBlind">Big Blind</label>
       <select id="big-blind" class="setup-select">
         <option value="5">$5</option>
         <option value="10">$10</option>
@@ -128,209 +139,209 @@
         <option value="50">$50</option>
         <option value="100">$100</option>
       </select>
-      <label class="setup-label" for="ante">Ante</label>
+      <label class="setup-label" for="ante" data-i18n="setup.ante">Ante</label>
       <select id="ante" class="setup-select" title="Everyone posts an ante into the pot before each hand">
-        <option value="0" selected>Off</option>
+        <option value="0" selected data-i18n="setup.anteOff">Off</option>
         <option value="0.5">½ BB</option>
         <option value="1">1 BB</option>
       </select>
       <span id="max-rebuys-wrap" class="max-rebuys-wrap hidden">
-        <label class="setup-label" for="max-rebuys">Rebuys</label>
+        <label class="setup-label" for="max-rebuys" data-i18n="setup.rebuys">Rebuys</label>
         <select id="max-rebuys" class="setup-select">
-          <option value="0">None</option>
+          <option value="0" data-i18n="setup.rebuysNone">None</option>
           <option value="1">1 per player</option>
           <option value="2">2 per player</option>
           <option value="3" selected>3 per player</option>
           <option value="5">5 per player</option>
-          <option value="-1">Unlimited</option>
+          <option value="-1" data-i18n="setup.rebuysUnlimited">Unlimited</option>
         </select>
       </span>
       <div class="setup-actions">
-        <button id="btn-new-hand" class="btn btn-deal">Deal Hand</button>
-        <button id="btn-save-stack" class="btn btn-save-stack hidden" type="button">Save Stack</button>
-        <button id="btn-reset-solo" class="btn btn-reset-solo hidden" type="button">Reset Game</button>
+        <button id="btn-new-hand" class="btn btn-deal" data-i18n="setup.dealHand">Deal Hand</button>
+        <button id="btn-save-stack" class="btn btn-save-stack hidden" type="button" data-i18n="setup.saveStack">Save Stack</button>
+        <button id="btn-reset-solo" class="btn btn-reset-solo hidden" type="button" data-i18n="setup.resetGame">Reset Game</button>
       </div>
-      <button id="btn-open-tables" class="btn btn-open-tables" type="button">Open Tables</button>
-      <button id="btn-private-room" class="btn btn-private-room" type="button">Private Room</button>
-      <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled>Replay Hand</button>
+      <button id="btn-open-tables" class="btn btn-open-tables" type="button" data-i18n="setup.openTables">Open Tables</button>
+      <button id="btn-private-room" class="btn btn-private-room" type="button" data-i18n="setup.privateRoom">Private Room</button>
+      <button id="btn-replay-hand" class="btn btn-replay" type="button" disabled data-i18n="setup.replayHand">Replay Hand</button>
       <label class="setup-option">
         <input type="checkbox" id="show-bot-hands">
-        Show bot hands after each hand
+        <span data-i18n="setup.showBotHands">Show bot hands after each hand</span>
       </label>
     </div>
 
     <div id="public-tables-panel" class="multiplayer-panel hidden">
-      <h2 class="multiplayer-title">Open tables</h2>
-      <p class="public-rooms-sub">Join anytime — up to 8 players. Bot tables fill empty seats; humans-only tables need 2+ players to deal.</p>
-      <input type="text" id="public-player-name" class="lobby-input public-player-name" placeholder="Your name" maxlength="16">
+      <h2 class="multiplayer-title" data-i18n="lobby.openTitle">Open tables</h2>
+      <p class="public-rooms-sub" data-i18n="lobby.openSub">Join anytime — up to 8 players. Bot tables fill empty seats; humans-only tables need 2+ players to deal.</p>
+      <input type="text" id="public-player-name" class="lobby-input public-player-name" data-i18n-placeholder="lobby.yourName" placeholder="Your name" maxlength="16">
       <div id="public-rooms-list" class="public-rooms-list" role="list"></div>
     </div>
 
     <div id="private-room-panel" class="multiplayer-panel hidden">
-      <h2 class="multiplayer-title">Private room</h2>
-      <p class="private-room-sub">Create a room or join with a code from a friend.</p>
+      <h2 class="multiplayer-title" data-i18n="lobby.privateTitle">Private room</h2>
+      <p class="private-room-sub" data-i18n="lobby.privateSub">Create a room or join with a code from a friend.</p>
       <div id="lobby-entry" class="lobby-entry">
-        <input type="text" id="player-name" class="lobby-input" placeholder="Your name" maxlength="16">
-        <input type="text" id="join-room-code" class="lobby-input lobby-code-input" placeholder="Room code" maxlength="6" autocapitalize="characters" spellcheck="false">
-        <button id="btn-create-room" class="btn btn-multiplayer" type="button">Create Room</button>
-        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button">Join Room</button>
+        <input type="text" id="player-name" class="lobby-input" data-i18n-placeholder="lobby.yourName" placeholder="Your name" maxlength="16">
+        <input type="text" id="join-room-code" class="lobby-input lobby-code-input" data-i18n-placeholder="lobby.roomCode" placeholder="Room code" maxlength="6" autocapitalize="characters" spellcheck="false">
+        <button id="btn-create-room" class="btn btn-multiplayer" type="button" data-i18n="lobby.createRoom">Create Room</button>
+        <button id="btn-join-room" class="btn btn-multiplayer-outline" type="button" data-i18n="lobby.joinRoom">Join Room</button>
       </div>
     </div>
 
     <aside class="sidebar">
       <div id="stats-panel" class="stats-panel hidden">
-        <h2>Your stats</h2>
+        <h2 data-i18n="stats.title">Your stats</h2>
         <dl class="stats-grid">
-          <div><dt>Hands</dt><dd id="stat-hands">0</dd></div>
-          <div><dt>Win rate</dt><dd id="stat-win-pct">0%</dd></div>
-          <div><dt>Net profit</dt><dd id="stat-profit">$0</dd></div>
+          <div><dt data-i18n="stats.hands">Hands</dt><dd id="stat-hands">0</dd></div>
+          <div><dt data-i18n="stats.winRate">Win rate</dt><dd id="stat-win-pct">0%</dd></div>
+          <div><dt data-i18n="stats.netProfit">Net profit</dt><dd id="stat-profit">$0</dd></div>
           <div><dt>VPIP</dt><dd id="stat-vpip">0%</dd></div>
           <div><dt>PFR</dt><dd id="stat-pfr">0%</dd></div>
           <div><dt>WTSD</dt><dd id="stat-wtsd">0%</dd></div>
           <div><dt>W$SD</dt><dd id="stat-wsd">0%</dd></div>
         </dl>
       </div>
-      <h2>Action Log</h2>
+      <h2 data-i18n="stats.log">Action Log</h2>
       <div id="log" class="log"></div>
     </aside>
   </div>
 
   <aside id="pwa-install" class="pwa-install hidden" role="complementary" aria-label="Install app">
     <button type="button" id="btn-pwa-dismiss" class="btn-pwa-dismiss" aria-label="Dismiss">×</button>
-    <p id="pwa-install-text" class="pwa-install-text">Install Poker Games Club on your home screen.</p>
-    <button type="button" id="btn-pwa-install" class="btn btn-pwa-install">Install</button>
+    <p id="pwa-install-text" class="pwa-install-text" data-i18n="msg.install">Install Poker Games Club on your home screen.</p>
+    <button type="button" id="btn-pwa-install" class="btn btn-pwa-install" data-i18n="pwa.install">Install</button>
   </aside>
 
   <aside id="promo-suggest" class="promo-suggest hidden" role="complementary" aria-label="Invite friends">
     <button type="button" id="btn-promo-dismiss" class="btn-promo-dismiss" aria-label="Dismiss">×</button>
-    <p id="promo-suggest-title" class="promo-suggest-title">Play with friends</p>
+    <p id="promo-suggest-title" class="promo-suggest-title" data-i18n="promo.inviteTitle">Play with friends</p>
     <p id="promo-suggest-text" class="promo-suggest-text"></p>
     <div class="promo-suggest-actions">
-      <button type="button" id="btn-promo-primary" class="btn btn-promo-primary">Invite</button>
-      <button type="button" id="btn-promo-secondary" class="btn btn-promo-secondary">Share</button>
+      <button type="button" id="btn-promo-primary" class="btn btn-promo-primary" data-i18n="promo.invite">Invite</button>
+      <button type="button" id="btn-promo-secondary" class="btn btn-promo-secondary" data-i18n="promo.share">Share</button>
     </div>
   </aside>
 
   <div id="auth-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
     <div class="join-modal-card auth-modal-card">
-      <h2 id="auth-modal-title">Sign in</h2>
-      <p class="join-modal-sub">Save your solo game and track stats across devices.</p>
+      <h2 id="auth-modal-title" data-i18n="account.signIn">Sign in</h2>
+      <p class="join-modal-sub" data-i18n="account.sub">Save your solo game and track stats across devices.</p>
       <div class="auth-tabs" role="tablist">
-        <button type="button" id="auth-tab-login" class="auth-tab active" data-tab="login">Sign in</button>
-        <button type="button" id="auth-tab-register" class="auth-tab" data-tab="register">Create account</button>
+        <button type="button" id="auth-tab-login" class="auth-tab active" data-tab="login" data-i18n="account.signIn">Sign in</button>
+        <button type="button" id="auth-tab-register" class="auth-tab" data-tab="register" data-i18n="account.create">Create account</button>
       </div>
-      <label class="join-modal-label" for="auth-email">Email</label>
+      <label class="join-modal-label" for="auth-email" data-i18n="account.email">Email</label>
       <input type="email" id="auth-email" class="join-modal-input" autocomplete="email" inputmode="email">
-      <label class="join-modal-label" for="auth-password">Password</label>
+      <label class="join-modal-label" for="auth-password" data-i18n="account.password">Password</label>
       <div class="password-field-wrap">
         <input type="password" id="auth-password" class="join-modal-input join-modal-input-password" autocomplete="current-password" minlength="8">
-        <button type="button" id="btn-auth-password-toggle" class="btn-password-toggle" aria-label="Show password">Show</button>
+        <button type="button" id="btn-auth-password-toggle" class="btn-password-toggle" data-i18n="auth.show" data-i18n-aria="auth.show">Show</button>
       </div>
       <div id="auth-confirm-password-wrap" class="auth-confirm-password-wrap hidden">
-        <label class="join-modal-label" for="auth-password-confirm">Confirm password</label>
+        <label class="join-modal-label" for="auth-password-confirm" data-i18n="auth.confirmPassword">Confirm password</label>
         <div class="password-field-wrap">
           <input type="password" id="auth-password-confirm" class="join-modal-input join-modal-input-password" autocomplete="new-password" minlength="8">
-          <button type="button" id="btn-auth-password-confirm-toggle" class="btn-password-toggle" aria-label="Show password">Show</button>
+          <button type="button" id="btn-auth-password-confirm-toggle" class="btn-password-toggle" data-i18n="auth.show" data-i18n-aria="auth.show">Show</button>
         </div>
       </div>
-      <p id="auth-password-hint" class="join-modal-hint auth-password-hint hidden">Use at least 8 characters. You can reset your password by email if you forget it.</p>
-      <p id="auth-verify-hint" class="join-modal-hint auth-verify-hint hidden">We'll email you a verification link. You must confirm your email before signing in.</p>
+      <p id="auth-password-hint" class="join-modal-hint auth-password-hint hidden" data-i18n="auth.passwordHint">Use at least 8 characters. You can reset your password by email if you forget it.</p>
+      <p id="auth-verify-hint" class="join-modal-hint auth-verify-hint hidden" data-i18n="auth.verifyHint">We'll email you a verification link. You must confirm your email before signing in.</p>
       <p id="auth-forgot-wrap" class="auth-forgot-wrap">
-        <button type="button" id="btn-auth-forgot" class="btn-auth-link hidden">Forgot password?</button>
+        <button type="button" id="btn-auth-forgot" class="btn-auth-link hidden" data-i18n="auth.forgot">Forgot password?</button>
         <span id="auth-reset-unavailable" class="join-modal-hint auth-reset-unavailable hidden">Password reset isn't available — sign in with the password you created when you registered.</span>
       </p>
-      <p id="auth-signin-name-hint" class="join-modal-hint auth-signin-name-hint hidden">Only email and password are needed here. Your display name can be anything — change it after signing in.</p>
-      <label class="join-modal-label auth-display-name-label hidden" for="auth-display-name">Display name</label>
+      <p id="auth-signin-name-hint" class="join-modal-hint auth-signin-name-hint hidden" data-i18n="auth.signinNameHint">Only email and password are needed here. Your display name can be anything — change it after signing in.</p>
+      <label class="join-modal-label auth-display-name-label hidden" for="auth-display-name" data-i18n="account.displayName">Display name</label>
       <input type="text" id="auth-display-name" class="join-modal-input auth-display-name-input hidden" maxlength="16" autocomplete="nickname">
-      <p id="auth-display-name-hint" class="join-modal-hint auth-display-name-hint hidden">This isn't permanent — you can update your display name any time you sign in.</p>
+      <p id="auth-display-name-hint" class="join-modal-hint auth-display-name-hint hidden" data-i18n="auth.displayNameHint">This isn't permanent — you can update your display name any time you sign in.</p>
       <p id="auth-modal-error" class="join-modal-error hidden"></p>
       <p id="auth-modal-success" class="join-modal-success hidden"></p>
       <p id="auth-resend-wrap" class="auth-forgot-wrap hidden">
-        <button type="button" id="btn-auth-resend" class="btn-auth-link">Resend verification email</button>
+        <button type="button" id="btn-auth-resend" class="btn-auth-link" data-i18n="auth.resend">Resend verification email</button>
       </p>
       <div class="join-modal-actions">
-        <button id="btn-auth-submit" class="btn btn-join-modal" type="button">Sign in</button>
-        <button id="btn-auth-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+        <button id="btn-auth-submit" class="btn btn-join-modal" type="button" data-i18n="account.signIn">Sign in</button>
+        <button id="btn-auth-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="account.cancel">Cancel</button>
       </div>
     </div>
   </div>
 
   <div id="account-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
     <div class="join-modal-card auth-modal-card">
-      <h2 id="account-modal-title">Your account</h2>
-      <p class="join-modal-sub">Shown at the table and in lobbies. You can change it anytime.</p>
-      <label class="join-modal-label" for="account-email">Email</label>
+      <h2 id="account-modal-title" data-i18n="account.yourAccount">Your account</h2>
+      <p class="join-modal-sub" data-i18n="account.profileSub">Shown at the table and in lobbies. You can change it anytime.</p>
+      <label class="join-modal-label" for="account-email" data-i18n="account.email">Email</label>
       <input type="email" id="account-email" class="join-modal-input" readonly>
-      <label class="join-modal-label" for="account-display-name">Display name</label>
+      <label class="join-modal-label" for="account-display-name" data-i18n="account.displayName">Display name</label>
       <input type="text" id="account-display-name" class="join-modal-input" maxlength="16" autocomplete="nickname">
       <p id="account-modal-error" class="join-modal-error hidden"></p>
       <div class="join-modal-actions">
-        <button id="btn-account-save" class="btn btn-join-modal" type="button">Save</button>
-        <button id="btn-account-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+        <button id="btn-account-save" class="btn btn-join-modal" type="button" data-i18n="account.save">Save</button>
+        <button id="btn-account-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="account.cancel">Cancel</button>
       </div>
       <div class="account-danger-zone">
-        <p class="account-danger-title">Delete account</p>
-        <p class="join-modal-sub">Permanently removes your account, stats, and saved games. This cannot be undone.</p>
-        <label class="join-modal-label" for="account-delete-password">Confirm with password</label>
+        <p class="account-danger-title" data-i18n="account.delete">Delete account</p>
+        <p class="join-modal-sub" data-i18n="account.deleteHint">Permanently removes your account, stats, and saved games. This cannot be undone.</p>
+        <label class="join-modal-label" for="account-delete-password" data-i18n="account.confirmPassword">Confirm with password</label>
         <input type="password" id="account-delete-password" class="join-modal-input" autocomplete="current-password">
-        <button id="btn-account-delete" class="btn btn-account-delete" type="button">Delete account</button>
+        <button id="btn-account-delete" class="btn btn-account-delete" type="button" data-i18n="account.delete">Delete account</button>
       </div>
     </div>
   </div>
 
   <div id="forgot-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="forgot-modal-title">
     <div class="join-modal-card auth-modal-card">
-      <h2 id="forgot-modal-title">Reset password</h2>
-      <p class="join-modal-sub">Enter your email and we will send a reset link if an account exists.</p>
-      <label class="join-modal-label" for="forgot-email">Email</label>
+      <h2 id="forgot-modal-title" data-i18n="forgot.title">Reset password</h2>
+      <p class="join-modal-sub" data-i18n="forgot.sub">Enter your email and we will send a reset link if an account exists.</p>
+      <label class="join-modal-label" for="forgot-email" data-i18n="account.email">Email</label>
       <input type="email" id="forgot-email" class="join-modal-input" autocomplete="email" inputmode="email">
       <p id="forgot-modal-error" class="join-modal-error hidden"></p>
       <p id="forgot-modal-success" class="join-modal-success hidden"></p>
       <div class="join-modal-actions">
-        <button id="btn-forgot-submit" class="btn btn-join-modal" type="button">Send reset link</button>
-        <button id="btn-forgot-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+        <button id="btn-forgot-submit" class="btn btn-join-modal" type="button" data-i18n="forgot.send">Send reset link</button>
+        <button id="btn-forgot-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="account.cancel">Cancel</button>
       </div>
     </div>
   </div>
 
   <div id="reset-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
     <div class="join-modal-card auth-modal-card">
-      <h2 id="reset-modal-title">Choose a new password</h2>
-      <p class="join-modal-sub">Enter a new password for your account.</p>
-      <label class="join-modal-label" for="reset-password">New password</label>
+      <h2 id="reset-modal-title" data-i18n="reset.title">Choose a new password</h2>
+      <p class="join-modal-sub" data-i18n="reset.sub">Enter a new password for your account.</p>
+      <label class="join-modal-label" for="reset-password" data-i18n="account.password">New password</label>
       <input type="password" id="reset-password" class="join-modal-input" autocomplete="new-password" minlength="8">
       <p id="reset-modal-error" class="join-modal-error hidden"></p>
       <p id="reset-modal-success" class="join-modal-success hidden"></p>
       <div class="join-modal-actions">
-        <button id="btn-reset-submit" class="btn btn-join-modal" type="button">Update password</button>
-        <button id="btn-reset-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+        <button id="btn-reset-submit" class="btn btn-join-modal" type="button" data-i18n="reset.update">Update password</button>
+        <button id="btn-reset-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="account.cancel">Cancel</button>
       </div>
     </div>
   </div>
 
   <div id="reset-solo-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="reset-solo-modal-title">
     <div class="join-modal-card">
-      <h2 id="reset-solo-modal-title">Reset game?</h2>
-      <p class="join-modal-sub">Chip stacks, dealer position, and hand history will be cleared. This cannot be undone.</p>
+      <h2 id="reset-solo-modal-title" data-i18n="table.resetTitle">Reset game?</h2>
+      <p class="join-modal-sub" data-i18n="table.resetSub">Chip stacks, dealer position, and hand history will be cleared. This cannot be undone.</p>
       <div class="join-modal-actions">
-        <button id="btn-reset-solo-confirm" class="btn btn-join-modal btn-reset-solo-confirm" type="button">Reset game</button>
-        <button id="btn-reset-solo-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+        <button id="btn-reset-solo-confirm" class="btn btn-join-modal btn-reset-solo-confirm" type="button" data-i18n="table.resetConfirm">Reset game</button>
+        <button id="btn-reset-solo-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="table.resetCancel">Cancel</button>
       </div>
     </div>
   </div>
 
   <div id="join-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="join-modal-title">
     <div class="join-modal-card">
-      <h2 id="join-modal-title">Join a game</h2>
+      <h2 id="join-modal-title" data-i18n="join.title">Join a game</h2>
       <p id="join-modal-sub" class="join-modal-sub">Enter the room code from your friend.</p>
-      <label class="join-modal-label" for="join-modal-room">Room code</label>
+      <label class="join-modal-label" for="join-modal-room" data-i18n="lobby.roomCode">Room code</label>
       <input type="text" id="join-modal-room" class="join-modal-input join-modal-code" placeholder="e.g. ABC123" maxlength="6" autocapitalize="characters" spellcheck="false">
-      <label class="join-modal-label" for="join-modal-name">Your name</label>
-      <input type="text" id="join-modal-name" class="join-modal-input" placeholder="Enter your name" maxlength="16" autocomplete="nickname">
+      <label class="join-modal-label" for="join-modal-name" data-i18n="lobby.yourName">Your name</label>
+      <input type="text" id="join-modal-name" class="join-modal-input" data-i18n-placeholder="lobby.yourName" placeholder="Enter your name" maxlength="16" autocomplete="nickname">
       <p id="join-modal-error" class="join-modal-error hidden"></p>
       <div class="join-modal-actions">
-        <button id="btn-join-modal-submit" class="btn btn-join-modal" type="button">Join Game</button>
-        <button id="btn-join-modal-cancel" class="btn btn-join-modal-cancel" type="button">Cancel</button>
+        <button id="btn-join-modal-submit" class="btn btn-join-modal" type="button" data-i18n="join.submit">Join Game</button>
+        <button id="btn-join-modal-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="join.cancel">Cancel</button>
       </div>
     </div>
   </div>

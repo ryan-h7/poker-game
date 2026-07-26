@@ -1,6 +1,7 @@
 import { SUIT_COLORS } from './engine.js';
 import { profileToHudSummary } from './opponent.js';
 import { shouldShowPromo, getActivePromoTip } from './promo.js';
+import { t } from './i18n.js';
 
 export const POT_BET_PRESETS = [0.25, 0.33, 0.5, 0.66, 0.75, 1, 1.25];
 
@@ -39,8 +40,8 @@ export function updateRaiseFromChips(game, elements, amount, { syncInput = true 
       : String(clamped);
   }
   if (raiseInput && syncInput && !inputFocused) raiseInput.value = display;
-  if (raiseInputLabel) raiseInputLabel.textContent = game.showInBB ? 'Raise to (BB)' : 'Raise to $';
-  if (raiseBtn) raiseBtn.textContent = `Raise to ${game.formatAmount(clamped)}`;
+  if (raiseInputLabel) raiseInputLabel.textContent = game.showInBB ? t('controls.raiseToBb') : t('controls.raiseToDollar');
+  if (raiseBtn) raiseBtn.textContent = t('controls.raiseTo', { amount: game.formatAmount(clamped) });
   updatePresetHighlight(game, elements, clamped);
   if (raiseHint) {
     const pct = potPercentForAmount(game, clamped);
@@ -368,14 +369,21 @@ export function renderPromoSuggest(game, elements) {
   if (!show) return;
 
   const tip = getActivePromoTip({ gameOver: game.isSoloGameOver() });
-  if (elements.promoSuggestTitle) elements.promoSuggestTitle.textContent = tip.title || 'Invite friends';
-  if (elements.promoSuggestText) elements.promoSuggestText.textContent = tip.text;
+  const titleKey = `promo.${tip.id}Title`;
+  const textKey = `promo.${tip.id}Text`;
+  if (elements.promoSuggestTitle) elements.promoSuggestTitle.textContent = t(titleKey);
+  if (elements.promoSuggestText) elements.promoSuggestText.textContent = t(textKey);
   if (elements.promoPrimaryBtn) {
-    elements.promoPrimaryBtn.textContent = tip.primary.label;
+    const primaryLabelKey = tip.primary.action === 'open' ? 'promo.open'
+      : tip.primary.action === 'copy' ? 'promo.copy'
+      : tip.primary.action === 'share' ? 'promo.share'
+      : 'promo.invite';
+    elements.promoPrimaryBtn.textContent = t(primaryLabelKey);
     elements.promoPrimaryBtn.dataset.action = tip.primary.action;
   }
   if (elements.promoSecondaryBtn) {
-    elements.promoSecondaryBtn.textContent = tip.secondary.label;
+    const secondaryLabelKey = tip.secondary.action === 'copy' ? 'promo.copy' : 'promo.share';
+    elements.promoSecondaryBtn.textContent = t(secondaryLabelKey);
     elements.promoSecondaryBtn.dataset.action = tip.secondary.action;
   }
 }
@@ -438,15 +446,15 @@ function formatHudPct(value) {
 function renderHudTooltip(stats) {
   if (!stats || stats.hands < 1) return '';
   return `<div class="player-hud-tooltip" role="tooltip">
-    <p class="player-hud-title">Table stats</p>
+    <p class="player-hud-title">${t('hud.tableStats')}</p>
     <dl class="player-hud-grid">
-      <div><dt>Hands</dt><dd>${stats.hands}</dd></div>
+      <div><dt>${t('stats.hands')}</dt><dd>${stats.hands}</dd></div>
       <div><dt>VPIP</dt><dd>${formatHudPct(stats.vpipPct)}</dd></div>
       <div><dt>PFR</dt><dd>${formatHudPct(stats.pfrPct)}</dd></div>
       <div><dt>WTSD</dt><dd>${formatHudPct(stats.wtsdPct)}</dd></div>
       <div><dt>W$SD</dt><dd>${formatHudPct(stats.wsdPct)}</dd></div>
     </dl>
-    <p class="player-hud-note">This table only</p>
+    <p class="player-hud-note">${t('hud.thisTable')}</p>
   </div>`;
 }
 
@@ -467,7 +475,7 @@ function renderPlayers(game, el) {
     const faceDown = !showCards
       || (folded && !(game.onlineMode && game.phase === 'showdown'));
     const peekFolded = (game.onlineMode ? i === game.localSeatIndex : p.isHuman) && folded && faceDown;
-    const youTag = game.onlineMode && i === game.localSeatIndex ? ' (you)' : '';
+    const youTag = game.onlineMode && i === game.localSeatIndex ? t('player.you') : '';
     const displayName = game.onlineMode ? game.getSeatDisplayName(i) : p.name;
     const isYou = game.onlineMode ? i === game.localSeatIndex : !!p.isHuman;
     const hudStats = !isYou ? getSeatHudStats(game, i) : null;
@@ -484,30 +492,30 @@ function renderPlayers(game, el) {
       <div class="player-info">
         <span class="player-name">${displayName}${youTag}</span>
         <span class="player-chips">${game.formatAmount(p.chips)}</span>
-        ${p.bet > 0 ? `<span class="player-bet">Bet: ${game.formatAmount(p.bet)}</span>` : ''}
-        ${folded ? '<span class="player-status">Folded</span>' : ''}
-        ${p.chips === 0 && p.inHand && !p.folded ? '<span class="player-status allin">All-In</span>' : ''}
+        ${p.bet > 0 ? `<span class="player-bet">${t('player.bet', { amount: game.formatAmount(p.bet) })}</span>` : ''}
+        ${folded ? `<span class="player-status">${t('player.folded')}</span>` : ''}
+        ${p.chips === 0 && p.inHand && !p.folded ? `<span class="player-status allin">${t('player.allIn')}</span>` : ''}
       </div>
     </div>`;
   }).join('');
 }
 
 function renderPot(game, el) {
-  el.textContent = game.pot > 0 ? `Pot: ${game.formatAmount(game.pot)}` : '';
+  el.textContent = game.pot > 0 ? t('pot.label', { amount: game.formatAmount(game.pot) }) : '';
 }
 
 function renderPhase(game, el) {
   if (game.replaying) {
-    el.textContent = 'Replay';
+    el.textContent = t('phase.replay');
     return;
   }
   const labels = {
-    idle: 'Ready',
-    preflop: 'Pre-Flop',
-    flop: 'Flop',
-    turn: 'Turn',
-    river: 'River',
-    showdown: 'Showdown',
+    idle: t('phase.ready'),
+    preflop: t('phase.preflop'),
+    flop: t('phase.flop'),
+    turn: t('phase.turn'),
+    river: t('phase.river'),
+    showdown: t('phase.showdown'),
   };
   el.textContent = labels[game.phase] || game.phase;
 }
@@ -551,7 +559,11 @@ function renderControls(game, elements) {
   if (botCountLabel) botCountLabel.textContent = String(game.getBotCount());
   if (tableSizeHint) {
     const humans = game.getHumanCount();
-    tableSizeHint.textContent = `${game.playerCount} players (${humans} human${humans === 1 ? '' : 's'})`;
+    tableSizeHint.textContent = t('setup.players', {
+      count: game.playerCount,
+      humans,
+      plural: humans === 1 ? '' : 's',
+    });
   }
   const lockTableMeta = game.onlineMode && game.roomStatus === 'active';
   if (addBotBtn) addBotBtn.disabled = configDisabled || inHand || !game.canAddBot();
@@ -602,7 +614,7 @@ function renderControls(game, elements) {
   if (elements.tableDetailsBtn) {
     const open = !!game.tableDetailsOpen;
     elements.tableDetailsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    elements.tableDetailsBtn.textContent = open ? 'Hide details' : 'Table details';
+    elements.tableDetailsBtn.textContent = open ? t('table.hideDetails') : t('table.details');
   }
 
   const lobbyMode = !game.onlineMode ? game.lobbyPanelMode : null;
@@ -621,8 +633,8 @@ function renderControls(game, elements) {
         || lowChips
         || (game.onlineMode && !game.isHost);
       newHandBtn.textContent = (game.onlineMode || game.soloSessionActive)
-        ? 'Deal Next Hand'
-        : 'Deal Hand';
+        ? t('setup.dealNext')
+        : t('setup.dealHand');
     }
     if (replayHandBtn) replayHandBtn.disabled = !game.canReplayHand();
     if (saveStackBtn) {
@@ -631,8 +643,8 @@ function renderControls(game, elements) {
       if (showSave) {
         const human = game.getHumanPlayer();
         saveStackBtn.textContent = human
-          ? `Save Stack (${game.formatAmount(human.chips)})`
-          : 'Save Stack';
+          ? t('setup.saveStackAmount', { amount: game.formatAmount(human.chips) })
+          : t('setup.saveStack');
       }
     }
     if (resetSoloBtn) {
@@ -655,8 +667,8 @@ function renderControls(game, elements) {
   checkBtn.classList.toggle('hidden', !canCheck);
   callBtn.classList.toggle('hidden', canCheck);
   callBtn.textContent = toCall >= player.chips
-    ? `All-In ${game.formatAmount(player.chips)}`
-    : `Call ${game.formatAmount(toCall)}`;
+    ? t('controls.allInAmount', { amount: game.formatAmount(player.chips) })
+    : t('controls.callAmount', { amount: game.formatAmount(toCall) });
   callBtn.disabled = toCall === 0 && !canCheck;
 
   syncRaiseControls(game, elements);

@@ -15,6 +15,7 @@ import {
   dismissPromo, clearActivePromoTip, getShareCopy, getAppShareUrl,
 } from './promo.js';
 import { initPwa } from './pwa.js';
+import { initI18n, setLanguage, getLanguage, t, applyDomTranslations } from './i18n.js';
 
 const elements = {
   community: document.getElementById('community'),
@@ -23,6 +24,10 @@ const elements = {
   phase: document.getElementById('phase'),
   log: document.getElementById('log'),
   message: document.getElementById('message'),
+  langBtn: document.getElementById('btn-lang'),
+  langOptions: document.getElementById('lang-options'),
+  langCurrent: document.getElementById('lang-current'),
+  langMenu: document.getElementById('lang-menu'),
   promoSuggest: document.getElementById('promo-suggest'),
   promoSuggestTitle: document.getElementById('promo-suggest-title'),
   promoSuggestText: document.getElementById('promo-suggest-text'),
@@ -189,7 +194,7 @@ function renderPublicRooms(rooms) {
   const el = elements.publicRoomsList;
   if (!el) return;
   if (!cachedPublicRooms.length) {
-    el.innerHTML = '<p class="public-rooms-sub">No open tables available right now.</p>';
+    el.innerHTML = `<p class="public-rooms-sub">${t('lobby.noTables')}</p>`;
     return;
   }
   const inRoom = inOnlineRoom && game.onlineMode;
@@ -198,7 +203,10 @@ function renderPublicRooms(rooms) {
     const full = seated >= room.maxPlayers;
     const statusClass = room.inHand ? 'in-hand' : '';
     const disabled = full || inRoom;
-    const label = full ? 'Table full' : (inRoom ? 'Already seated' : 'Join table');
+    const label = full
+      ? t('lobby.full')
+      : (inRoom ? t('lobby.join') : t('lobby.join'));
+    // Keep seated state distinct in English UI via existing disabled button; label still Join/Full.
     const tableType = room.allowBots === false ? 'Humans only' : 'With bots';
     return `<div class="public-room-card ${full ? 'is-full' : ''}" role="listitem">
       <div class="public-room-card-header">
@@ -237,7 +245,7 @@ async function joinPublicRoom(roomId) {
   if (!roomId || (inOnlineRoom && game.onlineMode)) return;
   const name = getPlayerName();
   if (!name || name === 'Player') {
-    setMessage(elements.message, 'Enter your name, then join a table.');
+    setMessage(elements.message, t('msg.enterName'));
     elements.publicPlayerNameInput?.focus();
     return;
   }
@@ -354,8 +362,8 @@ function setPasswordFieldVisible(input, toggleBtn, visible) {
   if (!input) return;
   input.type = visible ? 'text' : 'password';
   if (toggleBtn) {
-    toggleBtn.textContent = visible ? 'Hide' : 'Show';
-    toggleBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    toggleBtn.textContent = visible ? t('auth.hide') : t('auth.show');
+    toggleBtn.setAttribute('aria-label', visible ? t('auth.hide') : t('auth.show'));
   }
 }
 
@@ -400,12 +408,12 @@ function setAuthTab(tab) {
     setAuthResendVisible(false);
   }
   if (elements.authSubmitBtn) {
-    elements.authSubmitBtn.textContent = isRegister ? 'Create account' : 'Sign in';
+    elements.authSubmitBtn.textContent = isRegister ? t('account.create') : t('account.signIn');
   }
   if (elements.authModal?.querySelector('#auth-modal-title')) {
     elements.authModal.querySelector('#auth-modal-title').textContent = isRegister
-      ? 'Create account'
-      : 'Sign in';
+      ? t('account.create')
+      : t('account.signIn');
   }
   elements.authPassword?.setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
   updateAuthResetUI();
@@ -657,7 +665,7 @@ async function handleAuthSubmit() {
         const restored = await tryRestoreSoloSession();
         if (restored) return;
       }
-      setMessage(elements.message, `Signed in as ${name}. Solo games will sync to your account.`);
+      setMessage(elements.message, t('msg.signedIn', { name }));
     }
     renderGame(game, elements);
   } finally {
@@ -997,7 +1005,7 @@ function performSoloReset() {
   clearSoloState();
   if (auth.isLoggedIn()) auth.clearSoloGame();
   hideResetSoloModal();
-  setMessage(elements.message, 'Game reset. Click "Deal Hand" to start fresh.');
+  setMessage(elements.message, t('msg.gameReset'));
   renderGame(game, elements);
   elements.setupBar?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -1020,17 +1028,17 @@ function openLobbyPanel(mode) {
   if (nextMode === 'public') {
     showMultiplayerEntry(elements, 'public');
     startPublicRoomsPolling();
-    setMessage(elements.message, 'Pick an open table — up to 8 players, join anytime.');
+    setMessage(elements.message, t('msg.pickOpen'));
     elements.publicTablesPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } else if (nextMode === 'private') {
     stopPublicRoomsPolling();
     showMultiplayerEntry(elements, 'private');
-    setMessage(elements.message, 'Create a private room or join with a friend’s code.');
+    setMessage(elements.message, t('msg.privateHint'));
     elements.privateRoomPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } else {
     stopPublicRoomsPolling();
     hideMultiplayerPanel(elements);
-    setMessage(elements.message, 'Click "Deal Hand" to play solo, or choose Open Tables / Private Room.');
+    setMessage(elements.message, t('msg.dealPrompt'));
   }
   renderGame(game, elements);
 }
@@ -1182,7 +1190,7 @@ elements.joinModalCancel?.addEventListener('click', () => {
   pendingInviteRoomId = null;
   if (elements.joinModalRoomInput) elements.joinModalRoomInput.readOnly = false;
   clearRoomFromUrl();
-  setMessage(elements.message, 'Click "Deal Hand" to play solo, or choose Open Tables / Private Room.');
+  setMessage(elements.message, t('msg.dealPrompt'));
 });
 
 elements.joinModalName?.addEventListener('keydown', (e) => {
@@ -1276,7 +1284,7 @@ function leaveOnlineRoom() {
   hideMultiplayerPanel(elements);
   hideJoinModal(elements);
   clearRoomFromUrl();
-  setMessage(elements.message, 'Left the room.');
+  setMessage(elements.message, t('msg.dealPrompt'));
   renderGame(game, elements);
 }
 
@@ -1444,8 +1452,51 @@ elements.accountUser?.addEventListener('click', () => showAccountModal());
 elements.logoutBtn?.addEventListener('click', () => {
   auth.logout();
   updateAccountUI();
-  setMessage(elements.message, 'Signed out.');
+  setMessage(elements.message, t('msg.signedOut'));
 });
+
+function syncLangMenu() {
+  const code = getLanguage();
+  if (elements.langCurrent) {
+    elements.langCurrent.textContent = code === 'zh' ? '中文' : code.toUpperCase();
+  }
+  elements.langOptions?.querySelectorAll('.lang-option').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.lang === code);
+    btn.setAttribute('aria-selected', btn.dataset.lang === code ? 'true' : 'false');
+  });
+}
+
+function closeLangMenu() {
+  elements.langOptions?.classList.add('hidden');
+  elements.langBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleLangMenu() {
+  const open = elements.langOptions?.classList.contains('hidden');
+  elements.langOptions?.classList.toggle('hidden', !open);
+  elements.langBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+elements.langBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleLangMenu();
+});
+elements.langOptions?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.lang-option');
+  if (!btn?.dataset.lang) return;
+  setLanguage(btn.dataset.lang);
+  syncLangMenu();
+  closeLangMenu();
+  applyDomTranslations();
+  setAuthTab(authTab);
+  updateAccountUI();
+  renderGame(game, elements);
+  refreshPublicRooms();
+});
+document.addEventListener('click', (e) => {
+  if (!elements.langMenu?.contains(e.target)) closeLangMenu();
+});
+
 elements.authTabLogin?.addEventListener('click', () => setAuthTab('login'));
 elements.authTabRegister?.addEventListener('click', () => setAuthTab('register'));
 elements.authSubmitBtn?.addEventListener('click', () => handleAuthSubmit());
@@ -1538,6 +1589,8 @@ async function tryRestoreOnlineSession() {
 }
 
 const roomFromUrl = getRoomFromUrl();
+initI18n();
+syncLangMenu();
 initPwa();
 (async () => {
   accountsEnabled = await auth.checkDbAvailable();
@@ -1564,8 +1617,6 @@ initPwa();
     pendingInviteRoomId = roomFromUrl;
     showJoinModal(elements, roomFromUrl, { invited: true });
   } else {
-    setMessage(elements.message, accountsEnabled
-      ? 'Click "Deal Hand" to play solo, or sign in to save your game across devices.'
-      : 'Click "Deal Hand" to play solo, or choose Open Tables / Private Room.');
+    setMessage(elements.message, t('msg.dealPrompt'));
   }
 })();
