@@ -487,7 +487,7 @@ function renderPlayers(game, el) {
       ? p.hole.map(c => peekFolded ? peekCardHTML(c) : cardHTML(c, faceDown)).join('')
       : '<div class="card card-empty"></div><div class="card card-empty"></div>';
 
-    return `<div class="player-seat ${isActive ? 'active' : ''} ${folded ? 'folded' : ''} ${peekFolded ? 'peek-cards' : ''} ${hudHtml ? 'has-hud' : ''}" style="${style}">
+    return `<div class="player-seat ${isActive ? 'active' : ''} ${folded ? 'folded' : ''} ${peekFolded ? 'peek-cards' : ''} ${hudHtml ? 'has-hud' : ''} ${isYou ? 'seat-you' : ''}" style="${style}">
       ${hudHtml}
       ${isDealer ? '<span class="dealer-button">D</span>' : ''}
       <div class="player-cards">${cards}</div>
