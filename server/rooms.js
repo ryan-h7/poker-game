@@ -594,8 +594,8 @@ class Room {
   }
 
   kickMember(requesterSocketId, targetMemberId) {
-    if (this.status !== 'lobby') {
-      return { ok: false, error: 'Can only remove players while waiting in the lobby.' };
+    if (this.isPublic) {
+      return { ok: false, error: 'Cannot remove players from open tables.' };
     }
     const requester = this.getMemberBySocket(requesterSocketId);
     if (!requester || requester.token !== this.hostToken) {

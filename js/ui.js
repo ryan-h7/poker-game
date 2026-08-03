@@ -242,25 +242,27 @@ export function renderTableDetails(elements, info) {
             : 'Open table — waiting for someone to deal.');
       } else if (info.isHost) {
         lobbyHint.textContent = humans < 2
-          ? `Share the link below. Deal when ready — ${bots} bot${bots === 1 ? '' : 's'} fill empty seats.`
-          : 'Share the link below. Deal when everyone has joined.';
+          ? `Share the link below. Deal when ready — ${bots} bot${bots === 1 ? '' : 's'} fill empty seats. You can kick players from this list.`
+          : 'Share the link below. Deal when everyone has joined. You can kick players from this list.';
       } else {
         lobbyHint.textContent = 'Waiting for the host to deal…';
       }
     } else if (info.isHost) {
-      lobbyHint.textContent = 'You are the host — deal the next hand when ready.';
+      lobbyHint.textContent = info.isPublic
+        ? 'You are the host — deal the next hand when ready.'
+        : 'You are the host — deal the next hand when ready. Kick players from the list if needed.';
     } else {
       lobbyHint.textContent = 'Waiting for the host to deal the next hand…';
     }
   }
 
   if (lobbyPlayers && info.members) {
-    const inLobby = info.status === 'lobby';
     const canManage = info.isHost && info.members.length > 1;
     const maxRebuys = info.settings?.maxRebuys ?? 3;
+    const privateRoom = !info.isPublic;
     lobbyPlayers.innerHTML = info.members.map(m => {
       const showMakeHost = canManage && m.id !== info.localSocketId && !m.isHost;
-      const showKick = inLobby && canManage && m.id !== info.localSocketId && !m.isHost;
+      const showKick = privateRoom && canManage && m.id !== info.localSocketId && !m.isHost;
       let rebuyNote = '';
       if (maxRebuys !== 0) {
         const used = m.rebuyCount || 0;
