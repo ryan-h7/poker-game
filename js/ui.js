@@ -469,13 +469,17 @@ function renderPlayers(game, el) {
       game.phase !== 'idle' && game.phase !== 'showdown';
     const isDealer = i === game.dealerIndex;
     const showCards = game.onlineMode
-      ? (i === game.localSeatIndex || (game.phase === 'showdown' && !p.folded))
+      ? (i === game.localSeatIndex
+        || (game.phase === 'showdown' && !p.folded)
+        || (game.showBotHandsAtEnd && game.handsRevealed && !p.isHuman))
       : ((p.isHuman)
         || (game.showBotHandsAtEnd && game.handsRevealed)
         || (game.phase === 'showdown' && !p.folded));
     const folded = p.folded;
+    const botHandsUp = game.showBotHandsAtEnd && game.handsRevealed
+      && (game.onlineMode ? !p.isHuman : true);
     const faceDown = !showCards
-      || (folded && !(game.onlineMode && game.phase === 'showdown'));
+      || (folded && !botHandsUp && !(game.onlineMode && game.phase === 'showdown'));
     const peekFolded = (game.onlineMode ? i === game.localSeatIndex : p.isHuman) && folded && faceDown;
     const youTag = game.onlineMode && i === game.localSeatIndex ? t('player.you') : '';
     const displayName = game.onlineMode ? game.getSeatDisplayName(i) : p.name;
@@ -550,7 +554,13 @@ function renderControls(game, elements) {
     }
   }
   if (elements.showBotHandsCheckbox?.parentElement) {
-    elements.showBotHandsCheckbox.parentElement.classList.toggle('hidden', game.onlineMode);
+    const privateOnline = game.onlineMode && !game.isPublicRoom;
+    const showOpt = !game.onlineMode || privateOnline;
+    elements.showBotHandsCheckbox.parentElement.classList.toggle('hidden', !showOpt);
+    if (elements.showBotHandsCheckbox) {
+      elements.showBotHandsCheckbox.checked = !!game.showBotHandsAtEnd;
+      elements.showBotHandsCheckbox.disabled = privateOnline && !game.isHost;
+    }
   }
   if (skipBar) skipBar.classList.toggle('hidden', !game.canSkipHand());
   if (skipBtn) skipBtn.disabled = game.fastForward;

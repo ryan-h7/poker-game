@@ -73,14 +73,14 @@ io.on('connection', (socket) => {
     cb?.({ ok: true, ...result, inviteLink: link });
   });
 
-  socket.on('update-settings', ({ playerCount, bigBlind, startingStack, maxRebuys, anteFraction }, cb) => {
+  socket.on('update-settings', ({ playerCount, bigBlind, startingStack, maxRebuys, anteFraction, showBotHandsAtEnd }, cb) => {
     const room = rooms.get(socket.data.roomId);
     if (!room) {
       cb?.({ ok: false, error: 'Not in a room.' });
       return;
     }
     const ok = room.updateSettings(socket.id, {
-      playerCount, bigBlind, startingStack, maxRebuys, anteFraction,
+      playerCount, bigBlind, startingStack, maxRebuys, anteFraction, showBotHandsAtEnd,
     });
     cb?.({ ok, error: ok ? undefined : 'Could not update table settings.' });
   });

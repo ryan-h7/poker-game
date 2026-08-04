@@ -138,7 +138,7 @@ class Room {
     this.onEmpty = onEmpty;
     this.membersByToken = new Map();
     this.status = 'lobby';
-    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0 };
+    this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0, showBotHandsAtEnd: false };
     this.game = null;
     this.message = 'Waiting for players…';
     this.disconnectGraceMs = 90_000;
@@ -663,9 +663,14 @@ class Room {
     this.settings.startingStack = startingStack;
     this.settings.maxRebuys = maxRebuys;
     this.settings.anteFraction = anteFraction;
+    if (!this.isPublic && typeof settings.showBotHandsAtEnd === 'boolean') {
+      this.settings.showBotHandsAtEnd = settings.showBotHandsAtEnd;
+    }
     if (this.game) {
       this.game.startingStack = startingStack;
       this.game.anteFraction = anteFraction;
+      this.game.showBotHandsAtEnd = this.isPublic ? false : !!this.settings.showBotHandsAtEnd;
+      if (!this.game.showBotHandsAtEnd) this.game.handsRevealed = false;
       this.syncGamePlayers();
       if (this.status === 'lobby') {
         for (const p of this.game.players) p.chips = startingStack;
@@ -713,7 +718,7 @@ class Room {
     this.game = new PokerGame(onUpdate, onMessage);
     this.game.serverMode = true;
     this.game.onlineMode = true;
-    this.game.showBotHandsAtEnd = false;
+    this.game.showBotHandsAtEnd = this.isPublic ? false : !!this.settings.showBotHandsAtEnd;
     this.game.playerCount = this.settings.playerCount;
     this.game.bigBlind = this.settings.bigBlind;
     this.game.startingStack = this.settings.startingStack;
@@ -729,6 +734,7 @@ class Room {
     this.game.bigBlind = this.settings.bigBlind;
     this.game.anteFraction = this.settings.anteFraction ?? 0;
     this.game.minRaise = this.settings.bigBlind;
+    this.game.showBotHandsAtEnd = this.isPublic ? false : !!this.settings.showBotHandsAtEnd;
     if (this.status === 'lobby') {
       for (const p of this.game.players) p.chips = this.settings.startingStack;
     }
@@ -846,6 +852,7 @@ class Room {
       state.message = this.message;
       state.maxRebuys = this.settings.maxRebuys;
       state.localRebuyCount = member.rebuyCount || 0;
+      state.isPublic = this.isPublic;
       state.members = this.allMembers().map(m => this.memberPayload(m));
       const socket = this.io.sockets.sockets.get(member.socketId);
       if (socket) state.inviteLink = this.getInviteLink(socket);

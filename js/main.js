@@ -777,6 +777,13 @@ const network = new NetworkClient({
     game.startingStack = lobby.settings.startingStack ?? 1000;
     game.maxRebuys = lobby.settings.maxRebuys ?? 3;
     game.anteFraction = lobby.settings.anteFraction ?? 0;
+    if (lobby.settings.showBotHandsAtEnd !== undefined) {
+      showBotHandsAtEnd = !!lobby.settings.showBotHandsAtEnd;
+      game.showBotHandsAtEnd = showBotHandsAtEnd;
+    } else if (lobby.isPublic) {
+      showBotHandsAtEnd = false;
+      game.showBotHandsAtEnd = false;
+    }
     game.isPublicRoom = !!lobby.isPublic;
     game.allowBots = lobby.allowBots !== false;
     game.roomDisplayName = lobby.displayName || lobby.roomId;
@@ -830,6 +837,9 @@ const network = new NetworkClient({
     game.lobbyPanelMode = null;
     if (state.inviteLink) game.inviteLink = state.inviteLink;
     if (state.message) setMessage(elements.message, state.message);
+    if (state.showBotHandsAtEnd !== undefined) {
+      showBotHandsAtEnd = !!state.showBotHandsAtEnd;
+    }
     renderGame(game, elements);
   },
   onKicked: (reason) => {
@@ -883,6 +893,7 @@ function getTableSettings() {
     startingStack: parseInt(elements.startingStackSelect.value, 10),
     maxRebuys: parseInt(elements.maxRebuysSelect?.value ?? '3', 10),
     anteFraction: Number(elements.anteSelect?.value ?? 0),
+    showBotHandsAtEnd: !!game.showBotHandsAtEnd,
   };
 }
 
@@ -1384,12 +1395,24 @@ elements.autoSkipCheckbox.addEventListener('change', (e) => {
   try { localStorage.setItem('poker-auto-skip', autoSkipWhenFolded ? '1' : '0'); } catch { /* ignore */ }
 });
 
-elements.showBotHandsCheckbox.addEventListener('change', (e) => {
+elements.showBotHandsCheckbox.addEventListener('change', async (e) => {
+  const enabled = e.target.checked;
   if (game.onlineMode) {
-    e.target.checked = false;
+    if (game.isPublicRoom || !game.isHost) {
+      e.target.checked = !!game.showBotHandsAtEnd;
+      return;
+    }
+    showBotHandsAtEnd = enabled;
+    game.setShowBotHandsAtEnd(enabled);
+    const ok = await pushTableSettings({ showBotHandsAtEnd: enabled });
+    if (!ok) {
+      showBotHandsAtEnd = !enabled;
+      game.setShowBotHandsAtEnd(!enabled);
+      e.target.checked = !enabled;
+    }
     return;
   }
-  showBotHandsAtEnd = e.target.checked;
+  showBotHandsAtEnd = enabled;
   game.setShowBotHandsAtEnd(showBotHandsAtEnd);
   try { localStorage.setItem('poker-show-bot-hands', showBotHandsAtEnd ? '1' : '0'); } catch { /* ignore */ }
 });

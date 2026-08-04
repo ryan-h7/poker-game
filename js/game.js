@@ -186,11 +186,9 @@ export class PokerGame {
   toNetworkState(viewerSeat) {
     const showHole = (p, i) => {
       if (i === viewerSeat) return cloneCards(p.hole);
-      if (this.onlineMode) {
-        if (this.phase === 'showdown' && !p.folded) return cloneCards(p.hole);
-        return [];
+      if (this.showBotHandsAtEnd && this.handsRevealed && !p.isHuman && p.hole?.length) {
+        return cloneCards(p.hole);
       }
-      if (this.showBotHandsAtEnd && this.handsRevealed) return cloneCards(p.hole);
       if (this.phase === 'showdown' && !p.folded) return cloneCards(p.hole);
       return [];
     };
@@ -245,11 +243,15 @@ export class PokerGame {
     this.activeIndex = state.activeIndex;
     this.handHistory = [...(state.handHistory || [])];
     this.handsRevealed = !!state.handsRevealed;
+    if (state.showBotHandsAtEnd !== undefined) {
+      this.showBotHandsAtEnd = !!state.showBotHandsAtEnd;
+    }
     this.actedThisRound = new Set(state.actedThisRound || []);
     this._lastMessage = state.message || '';
     if (state.status) this.roomStatus = state.status;
     if (state.roomId) this.roomId = state.roomId;
     if (state.inviteLink) this.inviteLink = state.inviteLink;
+    if (state.isPublic !== undefined) this.isPublicRoom = !!state.isPublic;
     if (state.members?.length) this.setRoomMembers(state.members);
     if (state.tableHudStats) this.tableHudStats = state.tableHudStats;
     this.players = (state.players || []).map((p, i) => {
@@ -386,11 +388,13 @@ export class PokerGame {
   }
 
   logRevealedHands() {
-    if (!this.showBotHandsAtEnd || this.onlineMode) return;
+    if (!this.showBotHandsAtEnd) return;
     this.handsRevealed = true;
     this.handHistory.push('--- Hands ---');
     for (const p of this.players) {
       if (!p.hole.length) continue;
+      // In multiplayer, only reveal bot (non-human) hands — never other players' hole cards.
+      if (this.onlineMode && p.isHuman) continue;
       const cards = formatHoleCards(p.hole);
       if (this.community.length >= 3) {
         const score = evaluateHand([...p.hole, ...this.community]);
