@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { RoomManager, PUBLIC_ROOM_DEFS } from './rooms.js';
-import { initDb, isDbEnabled } from './db.js';
+import { initDb, isDbEnabled, isDbConfigured } from './db.js';
 import apiRouter from './api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -160,7 +160,7 @@ httpServer.on('error', (err) => {
 });
 
 async function start() {
-  if (isDbEnabled()) {
+  if (isDbConfigured()) {
     try {
       await initDb();
       console.log('Firestore connected.');

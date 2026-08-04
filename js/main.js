@@ -650,7 +650,9 @@ async function handleAuthSubmit() {
     }
 
     if (!result.ok) {
-      setAuthModalError(result.error || 'Could not sign in.');
+      setAuthModalError(result.error || (authTab === 'register'
+        ? 'Could not create account.'
+        : 'Could not sign in.'));
       return;
     }
 
@@ -668,6 +670,10 @@ async function handleAuthSubmit() {
       setMessage(elements.message, t('msg.signedIn', { name }));
     }
     renderGame(game, elements);
+  } catch (err) {
+    setAuthModalError(err?.message || (authTab === 'register'
+      ? 'Could not create account.'
+      : 'Could not sign in.'));
   } finally {
     elements.authSubmitBtn.disabled = false;
   }

@@ -4,13 +4,25 @@ import { getFirestore } from 'firebase-admin/firestore';
 let db = null;
 let initAttempted = false;
 let initError = null;
+let dbReady = false;
+
+function stripWrappingQuotes(value) {
+  const s = String(value || '').trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"'))
+    || (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
 
 function parseServiceAccount() {
   const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (rawJson) {
-    const parsed = JSON.parse(rawJson);
+    const parsed = JSON.parse(stripWrappingQuotes(rawJson));
     if (parsed.private_key) {
-      parsed.private_key = String(parsed.private_key).replace(/\\n/g, '\n');
+      parsed.private_key = stripWrappingQuotes(parsed.private_key).replace(/\\n/g, '\n');
     }
     return parsed;
   }
@@ -20,15 +32,16 @@ function parseServiceAccount() {
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
   if (!projectId || !clientEmail || !privateKey) return null;
 
-  privateKey = privateKey.replace(/\\n/g, '\n');
+  privateKey = stripWrappingQuotes(privateKey).replace(/\\n/g, '\n');
   return {
-    project_id: projectId,
-    client_email: clientEmail,
+    project_id: stripWrappingQuotes(projectId),
+    client_email: stripWrappingQuotes(clientEmail),
     private_key: privateKey,
   };
 }
 
-export function isDbEnabled() {
+/** True when Firebase env vars are present (may still fail to connect). */
+export function isDbConfigured() {
   return Boolean(
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON
     || (process.env.FIREBASE_PROJECT_ID
@@ -37,8 +50,13 @@ export function isDbEnabled() {
   );
 }
 
+/** True only after a successful Firestore connection at boot. */
+export function isDbEnabled() {
+  return dbReady;
+}
+
 export function getDb() {
-  if (!isDbEnabled()) return null;
+  if (!isDbConfigured()) return null;
   if (db) return db;
   if (initAttempted && initError) throw initError;
 
@@ -58,16 +76,24 @@ export function getDb() {
     return db;
   } catch (err) {
     initError = err;
+    dbReady = false;
     throw err;
   }
 }
 
 export async function initDb() {
-  if (!isDbEnabled()) return false;
-  const firestore = getDb();
-  // Touch Firestore so bad credentials fail at boot, not on first request.
-  await firestore.collection('users').limit(1).get();
-  return true;
+  if (!isDbConfigured()) return false;
+  try {
+    const firestore = getDb();
+    // Touch Firestore so bad credentials fail at boot, not on first request.
+    await firestore.collection('users').limit(1).get();
+    dbReady = true;
+    return true;
+  } catch (err) {
+    dbReady = false;
+    initError = err;
+    throw err;
+  }
 }
 
 export function userRef(userId) {
@@ -75,7 +101,8 @@ export function userRef(userId) {
 }
 
 export function emailRef(email) {
-  return getDb().collection('emailByEmail').doc(email);
+  const id = String(email || '').trim().toLowerCase().replace(/\//g, '_');
+  return getDb().collection('emailByEmail').doc(id);
 }
 
 export function statsRef(userId) {

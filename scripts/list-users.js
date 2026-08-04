@@ -1,7 +1,7 @@
 /** List registered accounts. Usage: set Firebase env vars then run `node scripts/list-users.js` */
-import { initDb, isDbEnabled, getDb, statsRef, statsToApi } from '../server/firebase.js';
+import { initDb, isDbConfigured, getDb, statsRef, statsToApi } from '../server/firebase.js';
 
-if (!isDbEnabled()) {
+if (!isDbConfigured()) {
   console.error('Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT_JSON).');
   process.exit(1);
 }
