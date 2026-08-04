@@ -416,6 +416,7 @@ function setAuthTab(tab) {
       : t('account.signIn');
   }
   elements.authPassword?.setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
+  elements.authPasswordConfirm?.setAttribute('autocomplete', 'off');
   updateAuthResetUI();
   setAuthModalError('');
 }

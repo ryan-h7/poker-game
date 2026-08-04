@@ -1396,19 +1396,19 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .community {
-    gap: 0.12rem;
-    transform: scale(0.78);
-    transform-origin: center;
+    gap: 0.25rem;
+    transform: none;
   }
 
+  /* Board + your hole cards stay readable; other seats stay compact */
   .card,
   .card-slot {
-    width: 28px;
-    height: 40px;
+    width: 26px;
+    height: 37px;
   }
 
-  .card-rank { font-size: 0.55rem; }
-  .card-suit { font-size: 0.65rem; }
+  .card-rank { font-size: 0.52rem; }
+  .card-suit { font-size: 0.6rem; }
 
   .card-back {
     border-width: 1px;
@@ -1420,6 +1420,20 @@ body.invite-join-pending .multiplayer-panel {
 
   .player-cards {
     gap: 0.1rem;
+  }
+
+  .community .card,
+  .community .card-slot {
+    width: 46px;
+    height: 66px;
+  }
+
+  .community .card-rank {
+    font-size: 0.9rem;
+  }
+
+  .community .card-suit {
+    font-size: 1.05rem;
   }
 
   /* Your hole cards — larger for readability on phones */
@@ -1558,15 +1572,30 @@ body.invite-join-pending .multiplayer-panel {
 
   .card,
   .card-slot {
-    width: 24px;
-    height: 34px;
+    width: 22px;
+    height: 32px;
   }
 
-  .card-rank { font-size: 0.5rem; }
-  .card-suit { font-size: 0.58rem; }
+  .card-rank { font-size: 0.46rem; }
+  .card-suit { font-size: 0.54rem; }
 
   .community {
-    transform: scale(0.72);
+    gap: 0.18rem;
+    transform: none;
+  }
+
+  .community .card,
+  .community .card-slot {
+    width: 40px;
+    height: 58px;
+  }
+
+  .community .card-rank {
+    font-size: 0.8rem;
+  }
+
+  .community .card-suit {
+    font-size: 0.95rem;
   }
 
   .player-seat.seat-you .card,
