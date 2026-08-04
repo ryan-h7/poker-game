@@ -2,6 +2,7 @@
 export {
   isDbEnabled,
   isDbConfigured,
+  getDbInitError,
   initDb,
   getDb,
 } from './firebase.js';

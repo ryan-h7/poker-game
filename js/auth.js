@@ -11,18 +11,31 @@ async function loadHealth() {
     const data = await res.json().catch(() => ({}));
     healthInfo = {
       db: res.ok && data.db === true,
+      dbConfigured: res.ok && data.dbConfigured === true,
+      dbError: data.dbError || null,
       passwordReset: res.ok && (data.passwordReset === true || data.email === true),
       emailVerification: res.ok && (data.emailVerification === true || data.email === true),
     };
   } catch {
-    healthInfo = { db: false, passwordReset: false, emailVerification: false };
+    healthInfo = {
+      db: false,
+      dbConfigured: false,
+      dbError: null,
+      passwordReset: false,
+      emailVerification: false,
+    };
   }
   return healthInfo;
 }
 
+/** Show Sign in when Firestore is up, or when credentials exist but connection failed. */
 export async function checkDbAvailable() {
   const health = await loadHealth();
-  return health.db;
+  return health.db || health.dbConfigured;
+}
+
+export async function getDbStatus() {
+  return loadHealth();
 }
 
 export async function isPasswordResetAvailable() {

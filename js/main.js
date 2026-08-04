@@ -1476,7 +1476,17 @@ elements.potPresets.addEventListener('click', (e) => {
 elements.raiseBtn.addEventListener('click', () => submitRaise(false));
 elements.allInBtn.addEventListener('click', () => submitRaise(true));
 
-elements.accountBtn?.addEventListener('click', () => showAuthModal('login'));
+elements.accountBtn?.addEventListener('click', async () => {
+  const status = await auth.getDbStatus();
+  if (!status.db) {
+    showAuthModal('login');
+    setAuthModalError(status.dbError
+      ? `Accounts unavailable: ${status.dbError}`
+      : 'Accounts are unavailable — Firestore is not connected.');
+    return;
+  }
+  showAuthModal('login');
+});
 elements.accountUser?.addEventListener('click', () => showAccountModal());
 elements.logoutBtn?.addEventListener('click', () => {
   auth.logout();

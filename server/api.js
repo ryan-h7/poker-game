@@ -1,12 +1,4 @@
-import { Router } from 'express';
-import { FieldValue } from 'firebase-admin/firestore';
-import { isDbEnabled } from './db.js';
-import {
-  soloSaveRef,
-  statsRef,
-  emptyStats,
-  statsToApi,
-} from './firebase.js';
+import { isDbEnabled, isDbConfigured, getDbInitError } from './db.js';
 import { isEmailConfigured } from './mail.js';
 import {
   authMiddleware,
@@ -21,14 +13,26 @@ import {
   deleteUserAccount,
   getAppBaseUrl,
 } from './auth.js';
+import {
+  soloSaveRef,
+  statsRef,
+  emptyStats,
+  statsToApi,
+} from './firebase.js';
+import { FieldValue } from 'firebase-admin/firestore';
+import { Router } from 'express';
 
 const router = Router();
 
 router.get('/health', (_, res) => {
-  const email = isDbEnabled() && isEmailConfigured();
+  const db = isDbEnabled();
+  const configured = isDbConfigured();
+  const email = db && isEmailConfigured();
   res.json({
     ok: true,
-    db: isDbEnabled(),
+    db,
+    dbConfigured: configured,
+    dbError: db || !configured ? undefined : getDbInitError(),
     email,
     passwordReset: email,
     emailVerification: email,

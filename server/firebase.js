@@ -55,6 +55,10 @@ export function isDbEnabled() {
   return dbReady;
 }
 
+export function getDbInitError() {
+  return initError?.message || null;
+}
+
 export function getDb() {
   if (!isDbConfigured()) return null;
   if (db) return db;
