@@ -1255,8 +1255,14 @@ export class PokerGame {
     }
     if (!this.applyAction(player, decision.action, decision.amount ?? 0)) {
       const toCall = this.currentBet - player.bet;
-      if (toCall > 0) this.applyAction(player, 'call');
-      else this.applyAction(player, 'check');
+      if (toCall > 0) {
+        // Failed bluff raises must not become accidental hero calls with junk.
+        const foldInstead = decision.isBluff || decision.isSemiBluff
+          || decision.isCheckRaise || decision.isOverbet;
+        this.applyAction(player, foldInstead ? 'fold' : 'call');
+      } else {
+        this.applyAction(player, 'check');
+      }
     } else if (decision.isBluff || decision.isSemiBluff || decision.isCbet || decision.isBarrel
       || decision.isCheckRaise || decision.isOverbet) {
       const i = this.handHistory.length - 1;

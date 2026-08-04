@@ -1312,6 +1312,19 @@ export function decideAction(player, game) {
     const continueThreshold = (isPreflop && facing.facing3BetPlus ? 0.48 : 0.55)
       + facing.reraiseExtra + (posTier === 'early' ? 0.08 : 0);
     if (effectiveStrength < continueThreshold) {
+      // Never hero-call with air (e.g. J-high) — bluff-raise or fold.
+      if (hand.category === 'air') {
+        if (!isPreflop && !potCtx.isMultiway) {
+          const airRaiseFreq = (facing.sizeCategory === 'overbet' ? 0.08 : 0.14)
+            + aggression * 0.16
+            + blockers.score * 0.1;
+          if (Math.random() < airRaiseFreq * hudBluffMult(oppRead)) {
+            const raised = tryRaise(true);
+            if (raised) return raised;
+          }
+        }
+        return { action: 'fold' };
+      }
       if (callIfPricedIn(priceCtx, stackCtx, facing, player, 0.2)) {
         return { action: 'call' };
       }
@@ -1337,7 +1350,15 @@ export function decideAction(player, game) {
       return { action: 'check' };
     }
     if (canCheck) return { action: 'check' };
+    // Only pick up tiny bets; never float medium+ with junk.
     if (toCall <= game.bigBlind && facing.sizeCategory === 'small') return { action: 'call' };
+    if (!potCtx.isMultiway && (facing.sizeCategory === 'medium' || facing.sizeCategory === 'large')) {
+      const floatBluff = (0.1 + aggression * 0.14 + blockers.score * 0.08) * hudBluffMult(oppRead);
+      if (Math.random() < floatBluff) {
+        const raised = tryRaise(true);
+        if (raised) return raised;
+      }
+    }
     return { action: 'fold' };
   }
 
