@@ -163,13 +163,13 @@ async function start() {
   if (isDbEnabled()) {
     try {
       await initDb();
-      console.log('Database connected and schema ready.');
+      console.log('Firestore connected.');
     } catch (err) {
-      console.error('Database initialization failed:', err.message);
-      console.error('Account features disabled until DATABASE_URL is valid.');
+      console.error('Firestore initialization failed:', err.message);
+      console.error('Account features disabled until Firebase credentials are valid.');
     }
   } else {
-    console.log('DATABASE_URL not set — running without accounts (sessionStorage solo saves only).');
+    console.log('Firebase credentials not set — running without accounts (sessionStorage solo saves only).');
   }
 
   rooms.initPublicRooms();

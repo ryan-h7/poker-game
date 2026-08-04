@@ -1,9 +1,3 @@
-databases:
-  - name: poker-game-db
-    plan: free
-    databaseName: poker_game
-    user: poker_game
-
 services:
   - type: web
     name: poker-game
@@ -15,12 +9,14 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
-      - key: DATABASE_URL
-        fromDatabase:
-          name: poker-game-db
-          property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM

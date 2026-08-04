@@ -1,5 +1,12 @@
 import { Router } from 'express';
+import { FieldValue } from 'firebase-admin/firestore';
 import { isDbEnabled } from './db.js';
+import {
+  soloSaveRef,
+  statsRef,
+  emptyStats,
+  statsToApi,
+} from './firebase.js';
 import { isEmailConfigured } from './mail.js';
 import {
   authMiddleware,
@@ -14,7 +21,6 @@ import {
   deleteUserAccount,
   getAppBaseUrl,
 } from './auth.js';
-import { query } from './db.js';
 
 const router = Router();
 
@@ -135,16 +141,13 @@ router.post('/auth/reset-password', async (req, res) => {
 
 router.get('/solo/save', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      'SELECT state_json, updated_at FROM solo_saves WHERE user_id = $1',
-      [req.user.id],
-    );
-    const row = result.rows[0];
-    if (!row) {
+    const snap = await soloSaveRef(req.user.id).get();
+    if (!snap.exists) {
       res.json({ ok: true, state: null });
       return;
     }
-    res.json({ ok: true, state: row.state_json, updatedAt: row.updated_at });
+    const data = snap.data();
+    res.json({ ok: true, state: data.state ?? null, updatedAt: data.updatedAt });
   } catch (err) {
     console.error('solo load error', err);
     res.status(500).json({ ok: false, error: 'Could not load saved game.' });
@@ -158,13 +161,10 @@ router.put('/solo/save', authMiddleware, async (req, res) => {
       res.status(400).json({ ok: false, error: 'Invalid solo game state.' });
       return;
     }
-    await query(
-      `INSERT INTO solo_saves (user_id, state_json, updated_at)
-       VALUES ($1, $2, now())
-       ON CONFLICT (user_id)
-       DO UPDATE SET state_json = EXCLUDED.state_json, updated_at = now()`,
-      [req.user.id, state],
-    );
+    await soloSaveRef(req.user.id).set({
+      state,
+      updatedAt: new Date().toISOString(),
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error('solo save error', err);
@@ -174,7 +174,7 @@ router.put('/solo/save', authMiddleware, async (req, res) => {
 
 router.delete('/solo/save', authMiddleware, async (req, res) => {
   try {
-    await query('DELETE FROM solo_saves WHERE user_id = $1', [req.user.id]);
+    await soloSaveRef(req.user.id).delete();
     res.json({ ok: true });
   } catch (err) {
     console.error('solo delete error', err);
@@ -184,22 +184,8 @@ router.delete('/solo/save', authMiddleware, async (req, res) => {
 
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
-    const result = await query(
-      `SELECT hands_played, hands_won, total_profit, vpip_count, pfr_count,
-              showdown_count, showdown_wins
-       FROM user_stats WHERE user_id = $1`,
-      [req.user.id],
-    );
-    const stats = result.rows[0] || {
-      hands_played: 0,
-      hands_won: 0,
-      total_profit: 0,
-      vpip_count: 0,
-      pfr_count: 0,
-      showdown_count: 0,
-      showdown_wins: 0,
-    };
-    res.json({ ok: true, stats });
+    const snap = await statsRef(req.user.id).get();
+    res.json({ ok: true, stats: statsToApi(snap.exists ? snap.data() : emptyStats()) });
   } catch (err) {
     console.error('stats load error', err);
     res.status(500).json({ ok: false, error: 'Could not load stats.' });
@@ -218,28 +204,29 @@ router.post('/stats/hand', authMiddleware, async (req, res) => {
     } = req.body || {};
 
     const profitInt = Number.parseInt(profit, 10) || 0;
-    await query(
-      `INSERT INTO user_stats (user_id, hands_played, hands_won, total_profit,
-                               vpip_count, pfr_count, showdown_count, showdown_wins)
-       VALUES ($1, 1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (user_id) DO UPDATE SET
-         hands_played = user_stats.hands_played + 1,
-         hands_won = user_stats.hands_won + EXCLUDED.hands_won,
-         total_profit = user_stats.total_profit + EXCLUDED.total_profit,
-         vpip_count = user_stats.vpip_count + EXCLUDED.vpip_count,
-         pfr_count = user_stats.pfr_count + EXCLUDED.pfr_count,
-         showdown_count = user_stats.showdown_count + EXCLUDED.showdown_count,
-         showdown_wins = user_stats.showdown_wins + EXCLUDED.showdown_wins`,
-      [
-        req.user.id,
-        won ? 1 : 0,
-        profitInt,
-        vpip ? 1 : 0,
-        pfr ? 1 : 0,
-        sawShowdown ? 1 : 0,
-        wonShowdown ? 1 : 0,
-      ],
-    );
+    const ref = statsRef(req.user.id);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set({
+        handsPlayed: 1,
+        handsWon: won ? 1 : 0,
+        totalProfit: profitInt,
+        vpipCount: vpip ? 1 : 0,
+        pfrCount: pfr ? 1 : 0,
+        showdownCount: sawShowdown ? 1 : 0,
+        showdownWins: wonShowdown ? 1 : 0,
+      });
+    } else {
+      await ref.update({
+        handsPlayed: FieldValue.increment(1),
+        handsWon: FieldValue.increment(won ? 1 : 0),
+        totalProfit: FieldValue.increment(profitInt),
+        vpipCount: FieldValue.increment(vpip ? 1 : 0),
+        pfrCount: FieldValue.increment(pfr ? 1 : 0),
+        showdownCount: FieldValue.increment(sawShowdown ? 1 : 0),
+        showdownWins: FieldValue.increment(wonShowdown ? 1 : 0),
+      });
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('stats hand error', err);
