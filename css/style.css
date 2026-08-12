@@ -154,6 +154,20 @@ header h1 {
   gap: 0.4rem;
 }
 
+.community .card,
+.community .card-slot {
+  width: 60px;
+  height: 86px;
+}
+
+.community .card-rank {
+  font-size: 1.15rem;
+}
+
+.community .card-suit {
+  font-size: 1.35rem;
+}
+
 .seats {
   position: absolute;
   inset: 0;
@@ -1379,13 +1393,13 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .table {
-    max-width: min(94vw, 360px);
-    aspect-ratio: 4 / 5;
+    max-width: min(98vw, 400px);
+    aspect-ratio: 3 / 4;
     margin: 0 auto;
   }
 
   .table-felt {
-    inset: 10% 10%;
+    inset: 12% 14%;
     gap: 0.35rem;
     border-width: 4px;
   }
@@ -1396,8 +1410,10 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .community {
-    gap: 0.25rem;
+    gap: 0.2rem;
     transform: none;
+    position: relative;
+    z-index: 2;
   }
 
   /* Board + your hole cards stay readable; other seats stay compact */
@@ -1416,6 +1432,13 @@ body.invite-join-pending .multiplayer-panel {
 
   .player-seat {
     gap: 0.15rem;
+    z-index: 1;
+  }
+
+  /* Side seats: keep opponent cards compact so they don't crowd the board */
+  .player-seat:not(.seat-you) .player-cards {
+    transform: scale(0.92);
+    transform-origin: center;
   }
 
   .player-cards {
@@ -1424,16 +1447,16 @@ body.invite-join-pending .multiplayer-panel {
 
   .community .card,
   .community .card-slot {
-    width: 46px;
-    height: 66px;
+    width: 54px;
+    height: 76px;
   }
 
   .community .card-rank {
-    font-size: 0.9rem;
+    font-size: 1.05rem;
   }
 
   .community .card-suit {
-    font-size: 1.05rem;
+    font-size: 1.2rem;
   }
 
   /* Your hole cards — larger for readability on phones */
@@ -1566,7 +1589,7 @@ body.invite-join-pending .multiplayer-panel {
 /* Very narrow portrait */
 @media (orientation: portrait) and (max-width: 380px) {
   .table {
-    max-width: 96vw;
+    max-width: 98vw;
     aspect-ratio: 3 / 4;
   }
 
@@ -1586,16 +1609,16 @@ body.invite-join-pending .multiplayer-panel {
 
   .community .card,
   .community .card-slot {
-    width: 40px;
-    height: 58px;
+    width: 48px;
+    height: 68px;
   }
 
   .community .card-rank {
-    font-size: 0.8rem;
+    font-size: 0.95rem;
   }
 
   .community .card-suit {
-    font-size: 0.95rem;
+    font-size: 1.1rem;
   }
 
   .player-seat.seat-you .card,
