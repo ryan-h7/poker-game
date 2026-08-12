@@ -1510,7 +1510,7 @@ elements.logModal?.addEventListener('click', (e) => {
 function syncLangMenu() {
   const code = getLanguage();
   if (elements.langCurrent) {
-    elements.langCurrent.textContent = code === 'zh' ? '中文' : code.toUpperCase();
+    elements.langCurrent.textContent = code === 'zh' ? 'CN' : code.toUpperCase();
   }
   elements.langOptions?.querySelectorAll('.lang-option').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.lang === code);
