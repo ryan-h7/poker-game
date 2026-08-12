@@ -648,13 +648,8 @@ function renderControls(game, elements) {
       newHandBtn.textContent = (game.onlineMode || game.soloSessionActive)
         ? t('setup.dealNext')
         : t('setup.dealHand');
-    }
-    const dealOverlay = elements.dealOverlayBtn;
-    if (dealOverlay) {
-      const showOverlay = !newHandBtn?.disabled && !game.replaying;
-      dealOverlay.disabled = !showOverlay;
-      dealOverlay.textContent = newHandBtn?.textContent || t('setup.dealHand');
-      dealOverlay.classList.toggle('hidden', !showOverlay);
+      const showDeal = !newHandBtn.disabled && !game.replaying;
+      newHandBtn.classList.toggle('hidden', !showDeal);
     }
     if (replayHandBtn) replayHandBtn.disabled = !game.canReplayHand();
     if (saveStackBtn) {
@@ -674,7 +669,7 @@ function renderControls(game, elements) {
     return;
   }
 
-  elements.dealOverlayBtn?.classList.add('hidden');
+  if (newHandBtn) newHandBtn.classList.add('hidden');
 
   controls.classList.toggle('hidden', !isTurn);
 

@@ -46,7 +46,6 @@ const elements = {
   potPresets: document.getElementById('pot-presets'),
   raiseHint: document.getElementById('raise-hint'),
   newHandBtn: document.getElementById('btn-new-hand'),
-  dealOverlayBtn: document.getElementById('btn-deal-overlay'),
   replayHandBtn: document.getElementById('btn-replay-hand'),
   saveStackBtn: document.getElementById('btn-save-stack'),
   resetSoloBtn: document.getElementById('btn-reset-solo'),
@@ -994,10 +993,6 @@ elements.newHandBtn.addEventListener('click', async () => {
     return;
   }
   game.startNewHand();
-});
-
-elements.dealOverlayBtn?.addEventListener('click', () => {
-  elements.newHandBtn?.click();
 });
 
 elements.replayHandBtn.addEventListener('click', () => game.replayHand());
