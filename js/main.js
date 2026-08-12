@@ -300,14 +300,10 @@ async function recordHandStats(handStats) {
 }
 
 async function refreshStatsDisplay() {
-  if (!auth.isLoggedIn() || !accountsEnabled) {
-    elements.statsPanel?.classList.add('hidden');
-    return;
-  }
+  if (!auth.isLoggedIn() || !accountsEnabled) return;
   const raw = await auth.fetchStats();
   const stats = auth.formatStats(raw);
-  if (!stats || !elements.statsPanel) return;
-  elements.statsPanel.classList.remove('hidden');
+  if (!stats) return;
   if (elements.statHands) elements.statHands.textContent = String(stats.hands);
   if (elements.statWinPct) elements.statWinPct.textContent = `${stats.winPct}%`;
   if (elements.statProfit) {
@@ -324,7 +320,6 @@ async function refreshStatsDisplay() {
 function updateAccountUI() {
   if (!accountsEnabled) {
     elements.accountBar?.classList.add('hidden');
-    elements.statsPanel?.classList.add('hidden');
     return;
   }
   elements.accountBar?.classList.remove('hidden');
@@ -334,12 +329,10 @@ function updateAccountUI() {
     if (elements.accountUser) elements.accountUser.textContent = user.displayName;
     elements.accountBtn?.classList.add('hidden');
     elements.logoutBtn?.classList.remove('hidden');
-    refreshStatsDisplay();
   } else {
     elements.accountUser?.classList.add('hidden');
     elements.accountBtn?.classList.remove('hidden');
     elements.logoutBtn?.classList.add('hidden');
-    elements.statsPanel?.classList.add('hidden');
   }
 }
 
@@ -434,6 +427,7 @@ function showAccountModal() {
   setModalMessage(elements.accountModalError, '');
   if (elements.accountDeletePassword) elements.accountDeletePassword.value = '';
   elements.accountModal?.classList.remove('hidden');
+  refreshStatsDisplay();
 }
 
 function hideAccountModal() {

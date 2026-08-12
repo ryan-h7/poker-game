@@ -34,7 +34,7 @@
         </ul>
       </div>
       <div id="account-bar" class="account-bar hidden">
-        <button id="account-user" class="account-user hidden" type="button" title="Edit display name"></button>
+        <button id="account-user" class="account-user hidden" type="button" title="Profile & stats" data-i18n-aria="account.yourAccount"></button>
         <button id="btn-account" class="btn btn-account" type="button" data-i18n="account.signIn">Sign in</button>
         <button id="btn-logout" class="btn btn-account-outline hidden" type="button" data-i18n="account.logOut">Log out</button>
       </div>
@@ -190,18 +190,6 @@
     </div>
 
     <aside class="sidebar">
-      <div id="stats-panel" class="stats-panel hidden">
-        <h2 data-i18n="stats.title">Your stats</h2>
-        <dl class="stats-grid">
-          <div><dt data-i18n="stats.hands">Hands</dt><dd id="stat-hands">0</dd></div>
-          <div><dt data-i18n="stats.winRate">Win rate</dt><dd id="stat-win-pct">0%</dd></div>
-          <div><dt data-i18n="stats.netProfit">Net profit</dt><dd id="stat-profit">$0</dd></div>
-          <div><dt>VPIP</dt><dd id="stat-vpip">0%</dd></div>
-          <div><dt>PFR</dt><dd id="stat-pfr">0%</dd></div>
-          <div><dt>WTSD</dt><dd id="stat-wtsd">0%</dd></div>
-          <div><dt>W$SD</dt><dd id="stat-wsd">0%</dd></div>
-        </dl>
-      </div>
       <h2 data-i18n="stats.log">Action Log</h2>
       <div id="log" class="log"></div>
     </aside>
@@ -280,6 +268,18 @@
         <button id="btn-account-save" class="btn btn-join-modal" type="button" data-i18n="account.save">Save</button>
         <button id="btn-account-cancel" class="btn btn-join-modal-cancel" type="button" data-i18n="account.cancel">Cancel</button>
       </div>
+      <section id="stats-panel" class="account-stats" aria-labelledby="account-stats-title">
+        <h3 id="account-stats-title" data-i18n="stats.title">Your stats</h3>
+        <dl class="stats-grid">
+          <div><dt data-i18n="stats.hands">Hands</dt><dd id="stat-hands">0</dd></div>
+          <div><dt data-i18n="stats.winRate">Win rate</dt><dd id="stat-win-pct">0%</dd></div>
+          <div><dt data-i18n="stats.netProfit">Net profit</dt><dd id="stat-profit">$0</dd></div>
+          <div><dt>VPIP</dt><dd id="stat-vpip">0%</dd></div>
+          <div><dt>PFR</dt><dd id="stat-pfr">0%</dd></div>
+          <div><dt>WTSD</dt><dd id="stat-wtsd">0%</dd></div>
+          <div><dt>W$SD</dt><dd id="stat-wsd">0%</dd></div>
+        </dl>
+      </section>
       <div class="account-danger-zone">
         <p class="account-danger-title" data-i18n="account.delete">Delete account</p>
         <p class="join-modal-sub" data-i18n="account.deleteHint">Permanently removes your account, stats, and saved games. This cannot be undone.</p>
