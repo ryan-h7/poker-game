@@ -649,6 +649,13 @@ function renderControls(game, elements) {
         ? t('setup.dealNext')
         : t('setup.dealHand');
     }
+    const dealOverlay = elements.dealOverlayBtn;
+    if (dealOverlay) {
+      const showOverlay = !newHandBtn?.disabled && !game.replaying;
+      dealOverlay.disabled = !showOverlay;
+      dealOverlay.textContent = newHandBtn?.textContent || t('setup.dealHand');
+      dealOverlay.classList.toggle('hidden', !showOverlay);
+    }
     if (replayHandBtn) replayHandBtn.disabled = !game.canReplayHand();
     if (saveStackBtn) {
       const showSave = game.isSoloGameOver();
@@ -666,6 +673,8 @@ function renderControls(game, elements) {
     }
     return;
   }
+
+  elements.dealOverlayBtn?.classList.add('hidden');
 
   controls.classList.toggle('hidden', !isTurn);
 

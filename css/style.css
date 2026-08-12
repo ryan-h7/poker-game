@@ -553,6 +553,43 @@ header h1 {
 
 .btn-deal.hidden { display: none; }
 
+/* Centered Deal Hand CTA over the table (mobile portrait) */
+.btn-deal-overlay {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .btn-deal-overlay:not(.hidden) {
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 25;
+    min-width: min(78%, 260px);
+    padding: 0.95rem 1.6rem;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    border-radius: 14px;
+    box-shadow:
+      0 0 0 3px rgba(201, 162, 39, 0.35),
+      0 10px 28px rgba(0, 0, 0, 0.55);
+    touch-action: manipulation;
+  }
+
+  .btn-deal-overlay:not(.hidden):active {
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+
+  /* Keep setup-bar Deal as secondary; overlay is primary on phones */
+  .setup-actions .btn-deal {
+    opacity: 0.72;
+    font-size: 0.8rem;
+    min-height: 40px;
+  }
+}
+
 .btn-replay {
   background: var(--surface);
   color: var(--gold);
