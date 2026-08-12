@@ -114,8 +114,11 @@ header h1 {
 .table-area {
   grid-column: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.65rem;
+  order: 2;
 }
 
 .table {
@@ -426,6 +429,8 @@ header h1 {
   justify-content: center;
   gap: 0.65rem;
   padding: 0.5rem;
+  order: 8;
+  margin-top: 0.75rem;
 }
 
 .controls.hidden { display: none; }
@@ -557,10 +562,12 @@ header h1 {
 .btn-deal.hidden { display: none; }
 
 .deal-footer {
-  grid-column: 1;
   display: flex;
   justify-content: center;
-  padding: 0.25rem 0 0.5rem;
+  width: 100%;
+  padding: 0.15rem 0 0.35rem;
+  position: relative;
+  z-index: 5;
 }
 
 .btn-log-link {
@@ -1406,13 +1413,31 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .deal-footer {
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-top: 0.15rem;
+    padding-bottom: 0.25rem;
   }
 
   .btn-deal {
     min-height: 48px;
     width: min(100%, 320px);
     font-size: 1.1rem;
+  }
+
+  .controls {
+    margin-top: 1.75rem;
+    padding-top: 1rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    gap: 0.45rem;
+  }
+
+  .action-row {
+    gap: 0.35rem;
+  }
+
+  .action-row .btn {
+    font-size: 0.8rem;
+    padding: 0.55rem 0.75rem;
+    min-height: 44px;
   }
 }
 
@@ -1429,8 +1454,10 @@ body.invite-join-pending .multiplayer-panel {
 
   .table-area {
     padding: 0 0.1rem;
-    align-items: flex-start;
+    align-items: center;
     overflow: visible;
+    gap: 0.85rem;
+    padding-bottom: 0.35rem;
   }
 
   .table {
@@ -1598,20 +1625,6 @@ body.invite-join-pending .multiplayer-panel {
   .btn-private-room {
     font-size: 0.85rem;
     padding: 0.55rem 0.75rem;
-  }
-
-  .controls {
-    padding: 0.25rem;
-    gap: 0.45rem;
-  }
-
-  .action-row {
-    gap: 0.35rem;
-  }
-
-  .action-row .btn {
-    font-size: 0.8rem;
-    padding: 0.5rem 0.65rem;
   }
 
   .raise-panel {
