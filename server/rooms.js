@@ -141,6 +141,7 @@ class Room {
     this.settings = { playerCount: 4, bigBlind: 20, startingStack: 1000, maxRebuys: 3, anteFraction: 0, showBotHandsAtEnd: false };
     this.game = null;
     this.message = 'Waiting for players…';
+    this.chatLog = [];
     this.disconnectGraceMs = 90_000;
     this.disconnectTurnGraceMs = 45_000;
     this.soloIdleTimer = null;
@@ -415,6 +416,7 @@ class Room {
     this.message = `${displayName} joined the table.`;
     this.clearSoloIdleTimer();
     this.syncTable();
+    this.emitChatHistory(socket.id);
     return {
       ok: true,
       roomId: this.id,
@@ -449,6 +451,7 @@ class Room {
     this.clearSoloIdleTimer();
     this.pushTableState();
     this.checkDisconnectedActiveTurn();
+    this.emitChatHistory(socket.id);
     return {
       ok: true,
       roomId: this.id,
@@ -807,6 +810,30 @@ class Room {
     const host = socket.request.headers.host || 'localhost:3000';
     const proto = socket.request.headers['x-forwarded-proto'] || 'http';
     return `${proto}://${host}/?room=${this.id}`;
+  }
+
+  emitChatHistory(socketId) {
+    const sock = this.io.sockets.sockets.get(socketId);
+    if (!sock) return;
+    sock.emit('chat-history', { messages: this.chatLog.slice(-60) });
+  }
+
+  postChat(socketId, text) {
+    const member = this.getMemberBySocket(socketId);
+    if (!member) return { ok: false, error: 'Not in a room.' };
+    const cleaned = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!cleaned) return { ok: false, error: 'Enter a message.' };
+    const message = {
+      id: randomUUID(),
+      name: member.name,
+      text: cleaned,
+      at: Date.now(),
+      seatIndex: member.seatIndex,
+    };
+    this.chatLog.push(message);
+    if (this.chatLog.length > 80) this.chatLog.splice(0, this.chatLog.length - 80);
+    this.io.to(this.id).emit('chat-message', message);
+    return { ok: true, message };
   }
 
   lobbyPayload(forSocketId) {

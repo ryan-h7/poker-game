@@ -26,6 +26,14 @@ const elements = {
   actionLogBtn: document.getElementById('btn-action-log'),
   logModal: document.getElementById('log-modal'),
   closeLogBtn: document.getElementById('btn-close-log'),
+  chatBtn: document.getElementById('btn-chat'),
+  chatPanel: document.getElementById('chat-panel'),
+  chatCloseBtn: document.getElementById('btn-chat-close'),
+  chatMessages: document.getElementById('chat-messages'),
+  chatForm: document.getElementById('chat-form'),
+  chatInput: document.getElementById('chat-input'),
+  chatUnread: document.getElementById('chat-unread'),
+  chatSendBtn: document.getElementById('btn-chat-send'),
   message: document.getElementById('message'),
   langBtn: document.getElementById('btn-lang'),
   langOptions: document.getElementById('lang-options'),
@@ -166,6 +174,106 @@ const elements = {
 
 let autoSkipWhenFolded = false;
 let showBotHandsAtEnd = false;
+let chatOpen = false;
+let chatUnreadCount = 0;
+const chatMessages = [];
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function updateChatVisibility() {
+  const show = isOnline();
+  elements.chatBtn?.classList.toggle('hidden', !show);
+  if (!show) {
+    chatOpen = false;
+    elements.chatPanel?.classList.add('hidden');
+    chatUnreadCount = 0;
+    updateChatUnread();
+  }
+}
+
+function updateChatUnread() {
+  if (!elements.chatUnread) return;
+  const show = chatUnreadCount > 0 && !chatOpen;
+  elements.chatUnread.classList.toggle('hidden', !show);
+  elements.chatUnread.textContent = chatUnreadCount > 9 ? '9+' : String(chatUnreadCount);
+}
+
+function renderChatMessages() {
+  if (!elements.chatMessages) return;
+  if (!chatMessages.length) {
+    elements.chatMessages.innerHTML = `<p class="chat-empty">${escapeHtml(t('chat.empty'))}</p>`;
+    return;
+  }
+  const localName = getPlayerName();
+  elements.chatMessages.innerHTML = chatMessages.map((msg) => {
+    const isYou = msg.name === localName;
+    const nameClass = isYou ? 'chat-you' : '';
+    return `<div class="chat-line">
+      <div class="chat-line-meta"><span class="${nameClass}">${escapeHtml(msg.name)}</span></div>
+      <div class="chat-line-text">${escapeHtml(msg.text)}</div>
+    </div>`;
+  }).join('');
+  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
+function appendChatMessage(message) {
+  if (!message?.text) return;
+  chatMessages.push(message);
+  if (chatMessages.length > 80) chatMessages.splice(0, chatMessages.length - 80);
+  renderChatMessages();
+  if (!chatOpen) {
+    chatUnreadCount += 1;
+    updateChatUnread();
+  }
+}
+
+function setChatHistory(messages) {
+  chatMessages.length = 0;
+  for (const msg of messages || []) chatMessages.push(msg);
+  renderChatMessages();
+}
+
+function openChatPanel() {
+  if (!isOnline()) {
+    setMessage(elements.message, t('chat.offline'));
+    return;
+  }
+  chatOpen = true;
+  chatUnreadCount = 0;
+  updateChatUnread();
+  elements.chatPanel?.classList.remove('hidden');
+  renderChatMessages();
+  elements.chatInput?.focus();
+}
+
+function closeChatPanel() {
+  chatOpen = false;
+  elements.chatPanel?.classList.add('hidden');
+}
+
+async function handleChatSubmit(e) {
+  e?.preventDefault?.();
+  const text = elements.chatInput?.value?.trim();
+  if (!text || !isOnline()) return;
+  elements.chatSendBtn.disabled = true;
+  try {
+    const res = await network.sendChat(text);
+    if (!res.ok) {
+      setMessage(elements.message, res.error || 'Could not send message.');
+      return;
+    }
+    if (elements.chatInput) elements.chatInput.value = '';
+  } finally {
+    elements.chatSendBtn.disabled = false;
+    elements.chatInput?.focus();
+  }
+}
 let showInBB = false;
 let inOnlineRoom = false;
 let pendingInviteRoomId = null;
@@ -178,13 +286,6 @@ let pendingResetToken = null;
 let pendingVerifyEmail = '';
 let publicRoomsPollTimer = null;
 let cachedPublicRooms = [];
-
-function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/"/g, '&quot;');
-}
 
 function formatPublicRoomStatus(room) {
   if (room.inHand) return 'Hand in progress';
@@ -829,6 +930,7 @@ const network = new NetworkClient({
       }
     }
     renderGame(game, elements);
+    updateChatVisibility();
   },
   onGameState: (state) => {
     inOnlineRoom = true;
@@ -845,6 +947,13 @@ const network = new NetworkClient({
       showBotHandsAtEnd = !!state.showBotHandsAtEnd;
     }
     renderGame(game, elements);
+    updateChatVisibility();
+  },
+  onChatMessage: (message) => {
+    appendChatMessage(message);
+  },
+  onChatHistory: (messages) => {
+    setChatHistory(messages);
   },
   onKicked: (reason) => {
     clearSoloState();
@@ -866,6 +975,9 @@ const network = new NetworkClient({
     clearRoomFromUrl();
     setMessage(elements.message, reason);
     renderGame(game, elements);
+    chatMessages.length = 0;
+    closeChatPanel();
+    updateChatVisibility();
   },
 });
 
@@ -1295,6 +1407,9 @@ function leaveOnlineRoom() {
   game.inviteLink = '';
   game.phase = 'idle';
   game.resetPlayers();
+  chatMessages.length = 0;
+  closeChatPanel();
+  updateChatVisibility();
   stopPublicRoomsPolling();
   hideMultiplayerPanel(elements);
   hideJoinModal(elements);
@@ -1506,6 +1621,13 @@ elements.closeLogBtn?.addEventListener('click', () => hideLogModal());
 elements.logModal?.addEventListener('click', (e) => {
   if (e.target === elements.logModal) hideLogModal();
 });
+
+elements.chatBtn?.addEventListener('click', () => {
+  if (chatOpen) closeChatPanel();
+  else openChatPanel();
+});
+elements.chatCloseBtn?.addEventListener('click', () => closeChatPanel());
+elements.chatForm?.addEventListener('submit', handleChatSubmit);
 
 function syncLangMenu() {
   const code = getLanguage();

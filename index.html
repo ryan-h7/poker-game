@@ -201,6 +201,23 @@
     </div>
   </div>
 
+  <div id="chat-panel" class="chat-panel hidden" role="dialog" aria-label="Table chat">
+    <div class="chat-panel-header">
+      <h2 data-i18n="chat.title">Table chat</h2>
+      <button type="button" id="btn-chat-close" class="btn-close-details" aria-label="Close chat">×</button>
+    </div>
+    <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+    <form id="chat-form" class="chat-form">
+      <input type="text" id="chat-input" class="chat-input" maxlength="200" data-i18n-placeholder="chat.placeholder" placeholder="Say something…" autocomplete="off">
+      <button type="submit" id="btn-chat-send" class="btn btn-chat-send" data-i18n="chat.send">Send</button>
+    </form>
+  </div>
+
+  <button type="button" id="btn-chat" class="btn btn-chat-fab hidden" aria-label="Open chat">
+    <span data-i18n="chat.button">Chat</span>
+    <span id="chat-unread" class="chat-unread hidden">0</span>
+  </button>
+
   <aside id="pwa-install" class="pwa-install hidden" role="complementary" aria-label="Install app">
     <button type="button" id="btn-pwa-dismiss" class="btn-pwa-dismiss" aria-label="Dismiss">×</button>
     <p id="pwa-install-text" class="pwa-install-text" data-i18n="msg.install">Install Poker Games Club on your home screen.</p>

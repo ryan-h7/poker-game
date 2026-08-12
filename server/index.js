@@ -130,6 +130,15 @@ io.on('connection', (socket) => {
     cb?.(room.rebuy(socket.id));
   });
 
+  socket.on('chat-message', ({ text }, cb) => {
+    const room = rooms.get(socket.data.roomId);
+    if (!room) {
+      cb?.({ ok: false, error: 'Join a table to chat.' });
+      return;
+    }
+    cb?.(room.postChat(socket.id, text));
+  });
+
   socket.on('leave-room', () => {
     const roomId = socket.data.roomId;
     if (!roomId) return;

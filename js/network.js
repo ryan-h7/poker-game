@@ -1,10 +1,12 @@
 export class NetworkClient {
-  constructor({ onLobby, onGameState, onError, onKicked, onPublicRooms }) {
+  constructor({ onLobby, onGameState, onError, onKicked, onPublicRooms, onChatMessage, onChatHistory }) {
     this.onLobby = onLobby;
     this.onGameState = onGameState;
     this.onError = onError;
     this.onKicked = onKicked;
     this.onPublicRooms = onPublicRooms;
+    this.onChatMessage = onChatMessage;
+    this.onChatHistory = onChatHistory;
     this.socket = null;
     this.roomId = null;
     this.inviteLink = null;
@@ -47,6 +49,12 @@ export class NetworkClient {
       this.socket.on('kicked', (payload) => {
         this.resetLocalSession();
         this.onKicked?.(payload?.reason || 'Removed from the table.');
+      });
+      this.socket.on('chat-message', (message) => {
+        this.onChatMessage?.(message);
+      });
+      this.socket.on('chat-history', (payload) => {
+        this.onChatHistory?.(payload?.messages || []);
       });
     });
   }
@@ -117,6 +125,10 @@ export class NetworkClient {
 
   sendAction(action, amount = 0) {
     return this.emit('player-action', { action, amount });
+  }
+
+  sendChat(text) {
+    return this.emit('chat-message', { text });
   }
 
   rebuy() {
