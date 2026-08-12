@@ -1393,20 +1393,24 @@ body.invite-join-pending .multiplayer-panel {
   }
 
   .table {
-    max-width: min(98vw, 400px);
-    aspect-ratio: 3 / 4;
+    max-width: min(96vw, 420px);
+    aspect-ratio: 1 / 1;
     margin: 0 auto;
   }
 
   .table-felt {
-    inset: 12% 14%;
-    gap: 0.35rem;
+    inset: 7% 7%;
+    gap: 0.4rem;
     border-width: 4px;
+    align-items: center;
+    justify-content: center;
   }
 
   .pot {
     font-size: 0.85rem;
     min-height: 1.1rem;
+    text-align: center;
+    width: 100%;
   }
 
   .community {
@@ -1414,6 +1418,11 @@ body.invite-join-pending .multiplayer-panel {
     transform: none;
     position: relative;
     z-index: 2;
+    justify-content: center;
+    align-self: center;
+    margin: 0 auto;
+    width: max-content;
+    max-width: 100%;
   }
 
   /* Board + your hole cards stay readable; other seats stay compact */
@@ -1447,16 +1456,16 @@ body.invite-join-pending .multiplayer-panel {
 
   .community .card,
   .community .card-slot {
-    width: 54px;
-    height: 76px;
+    width: 50px;
+    height: 72px;
   }
 
   .community .card-rank {
-    font-size: 1.05rem;
+    font-size: 0.98rem;
   }
 
   .community .card-suit {
-    font-size: 1.2rem;
+    font-size: 1.12rem;
   }
 
   /* Your hole cards — larger for readability on phones */
@@ -1589,8 +1598,12 @@ body.invite-join-pending .multiplayer-panel {
 /* Very narrow portrait */
 @media (orientation: portrait) and (max-width: 380px) {
   .table {
-    max-width: 98vw;
-    aspect-ratio: 3 / 4;
+    max-width: 96vw;
+    aspect-ratio: 1 / 1;
+  }
+
+  .table-felt {
+    inset: 6% 6%;
   }
 
   .card,
@@ -1603,22 +1616,22 @@ body.invite-join-pending .multiplayer-panel {
   .card-suit { font-size: 0.54rem; }
 
   .community {
-    gap: 0.18rem;
+    gap: 0.15rem;
     transform: none;
   }
 
   .community .card,
   .community .card-slot {
-    width: 48px;
-    height: 68px;
+    width: 44px;
+    height: 62px;
   }
 
   .community .card-rank {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
   }
 
   .community .card-suit {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
 
   .player-seat.seat-you .card,
