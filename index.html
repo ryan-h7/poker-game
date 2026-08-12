@@ -188,10 +188,19 @@
       </div>
     </div>
 
-    <aside class="sidebar">
-      <h2 data-i18n="stats.log">Action Log</h2>
-      <div id="log" class="log"></div>
-    </aside>
+    <div class="log-footer">
+      <button id="btn-action-log" class="btn btn-action-log" type="button" data-i18n="stats.log">Action Log</button>
+    </div>
+  </div>
+
+  <div id="log-modal" class="join-modal hidden" role="dialog" aria-modal="true" aria-labelledby="log-modal-title">
+    <div class="join-modal-card log-modal-card">
+      <div class="log-modal-header">
+        <h2 id="log-modal-title" data-i18n="stats.log">Action Log</h2>
+        <button id="btn-close-log" class="btn-close-details" type="button" aria-label="Close action log">×</button>
+      </div>
+      <div id="log" class="log log-modal-body"></div>
+    </div>
   </div>
 
   <aside id="pwa-install" class="pwa-install hidden" role="complementary" aria-label="Install app">

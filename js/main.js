@@ -23,6 +23,9 @@ const elements = {
   pot: document.getElementById('pot'),
   phase: document.getElementById('phase'),
   log: document.getElementById('log'),
+  actionLogBtn: document.getElementById('btn-action-log'),
+  logModal: document.getElementById('log-modal'),
+  closeLogBtn: document.getElementById('btn-close-log'),
   message: document.getElementById('message'),
   langBtn: document.getElementById('btn-lang'),
   langOptions: document.getElementById('lang-options'),
@@ -1487,6 +1490,21 @@ elements.logoutBtn?.addEventListener('click', () => {
   auth.logout();
   updateAccountUI();
   setMessage(elements.message, t('msg.signedOut'));
+});
+
+function showLogModal() {
+  elements.logModal?.classList.remove('hidden');
+  if (elements.log) elements.log.scrollTop = elements.log.scrollHeight;
+}
+
+function hideLogModal() {
+  elements.logModal?.classList.add('hidden');
+}
+
+elements.actionLogBtn?.addEventListener('click', () => showLogModal());
+elements.closeLogBtn?.addEventListener('click', () => hideLogModal());
+elements.logModal?.addEventListener('click', (e) => {
+  if (e.target === elements.logModal) hideLogModal();
 });
 
 function syncLangMenu() {
