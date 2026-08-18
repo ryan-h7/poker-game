@@ -207,13 +207,20 @@ const SOLO_STATE_KEY = 'poker-solo-state';
 export function saveSoloState(state) {
   if (!state) return;
   try {
-    sessionStorage.setItem(SOLO_STATE_KEY, JSON.stringify(state));
+    localStorage.setItem(SOLO_STATE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
 }
 
 export function loadSoloState() {
   try {
-    const raw = sessionStorage.getItem(SOLO_STATE_KEY);
+    let raw = localStorage.getItem(SOLO_STATE_KEY);
+    if (!raw) {
+      raw = sessionStorage.getItem(SOLO_STATE_KEY);
+      if (raw) {
+        localStorage.setItem(SOLO_STATE_KEY, raw);
+        sessionStorage.removeItem(SOLO_STATE_KEY);
+      }
+    }
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -222,5 +229,8 @@ export function loadSoloState() {
 }
 
 export function clearSoloState() {
-  try { sessionStorage.removeItem(SOLO_STATE_KEY); } catch { /* ignore */ }
+  try {
+    localStorage.removeItem(SOLO_STATE_KEY);
+    sessionStorage.removeItem(SOLO_STATE_KEY);
+  } catch { /* ignore */ }
 }

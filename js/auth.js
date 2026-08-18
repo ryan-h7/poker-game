@@ -225,8 +225,25 @@ export async function saveSoloGame(state) {
       body: JSON.stringify({ state }),
     });
   } catch {
-    /* ignore — sessionStorage still has a copy */
+    /* ignore — localStorage still has a copy */
   }
+}
+
+/** Best-effort cloud save when the page is closing (keepalive fetch). */
+export function saveSoloGameKeepalive(state) {
+  const token = getToken();
+  if (!token || !state) return;
+  try {
+    fetch('/api/solo/save', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ state }),
+      keepalive: true,
+    });
+  } catch { /* ignore */ }
 }
 
 export async function clearSoloGame() {

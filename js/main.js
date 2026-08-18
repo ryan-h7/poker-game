@@ -374,25 +374,36 @@ function setModalMessage(el, message, isSuccess = false) {
   el.classList.toggle('join-modal-error', !isSuccess);
 }
 
-async function persistSoloState(state) {
-  saveSoloState(state);
-  if (auth.isLoggedIn()) {
-    await auth.saveSoloGame(state);
+function flushSoloSave() {
+  if (game.onlineMode || game.replaying) return;
+  if (!game.soloSessionActive) {
+    clearSoloState();
+    if (auth.isLoggedIn()) auth.clearSoloGame();
+    return;
   }
+  const state = game.exportSoloState();
+  if (!state) return;
+  saveSoloState(state);
+  if (auth.isLoggedIn()) auth.saveSoloGameKeepalive(state);
 }
 
 function scheduleSoloSave() {
   if (game.onlineMode || game.replaying) return;
   clearTimeout(soloSaveTimer);
-  soloSaveTimer = setTimeout(async () => {
-    if (game.onlineMode || game.replaying) return;
-    if (!game.soloSessionActive) {
+  if (!game.soloSessionActive) {
+    soloSaveTimer = setTimeout(() => {
+      if (game.onlineMode || game.replaying) return;
       clearSoloState();
       if (auth.isLoggedIn()) auth.clearSoloGame();
-      return;
-    }
-    const state = game.exportSoloState();
-    if (state) await persistSoloState(state);
+    }, 250);
+    return;
+  }
+  const state = game.exportSoloState();
+  if (state) saveSoloState(state);
+  soloSaveTimer = setTimeout(async () => {
+    if (game.onlineMode || game.replaying || !game.soloSessionActive) return;
+    const latest = game.exportSoloState();
+    if (latest && auth.isLoggedIn()) await auth.saveSoloGame(latest);
   }, 250);
 }
 
@@ -1719,6 +1730,10 @@ window.addEventListener('resize', () => {
 });
 window.addEventListener('orientationchange', () => {
   setTimeout(() => renderGame(game, elements), 150);
+});
+window.addEventListener('pagehide', () => flushSoloSave());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushSoloSave();
 });
 
 async function tryRestoreSoloSession() {
