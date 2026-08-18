@@ -79,7 +79,6 @@ const elements = {
   setupBar: document.getElementById('setup-bar'),
   skipBar: document.getElementById('skip-bar'),
   skipBtn: document.getElementById('btn-skip'),
-  autoSkipCheckbox: document.getElementById('auto-skip'),
   showBotHandsCheckbox: document.getElementById('show-bot-hands'),
   displayModeBar: document.getElementById('display-mode'),
   displayDollarsBtn: document.getElementById('display-dollars'),
@@ -172,7 +171,6 @@ const elements = {
   statWsd: document.getElementById('stat-wsd'),
 };
 
-let autoSkipWhenFolded = false;
 let showBotHandsAtEnd = false;
 let chatOpen = false;
 let chatUnreadCount = 0;
@@ -854,8 +852,6 @@ function syncSoloUIFromGame() {
 }
 
 try {
-  autoSkipWhenFolded = localStorage.getItem('poker-auto-skip') === '1';
-  if (elements.autoSkipCheckbox) elements.autoSkipCheckbox.checked = autoSkipWhenFolded;
   showBotHandsAtEnd = localStorage.getItem('poker-show-bot-hands') === '1';
   if (elements.showBotHandsCheckbox) elements.showBotHandsCheckbox.checked = showBotHandsAtEnd;
   showInBB = localStorage.getItem('poker-show-in-bb') === '1';
@@ -1513,17 +1509,9 @@ elements.maxRebuysSelect?.addEventListener('change', async (e) => {
 
 elements.foldBtn.addEventListener('click', () => {
   sendAction('fold');
-  if (!isOnline() && autoSkipWhenFolded && game.canSkipHand()) {
-    setTimeout(() => game.skipRemainingHand(), 50);
-  }
 });
 
 elements.skipBtn.addEventListener('click', () => game.skipRemainingHand());
-
-elements.autoSkipCheckbox.addEventListener('change', (e) => {
-  autoSkipWhenFolded = e.target.checked;
-  try { localStorage.setItem('poker-auto-skip', autoSkipWhenFolded ? '1' : '0'); } catch { /* ignore */ }
-});
 
 elements.showBotHandsCheckbox.addEventListener('change', async (e) => {
   const enabled = e.target.checked;

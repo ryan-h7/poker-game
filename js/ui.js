@@ -563,8 +563,7 @@ function renderControls(game, elements) {
       elements.showBotHandsCheckbox.disabled = privateOnline && !game.isHost;
     }
   }
-  if (skipBar) skipBar.classList.toggle('hidden', !game.canSkipHand());
-  if (skipBtn) skipBtn.disabled = game.fastForward;
+  if (skipBar) skipBar.classList.add('hidden');
 
   const configDisabled = !canConfigure || !hostOrSolo;
   const betweenHands = game.phase === 'idle' || game.phase === 'showdown';

@@ -1087,8 +1087,13 @@ export class PokerGame {
     }
 
     this.actedThisRound.add(this.activeIndex);
-    this.onUpdate();
     this.afterAction();
+
+    if (action === 'fold' && this.canSkipHand()) {
+      this.skipRemainingHand();
+      return;
+    }
+    this.onUpdate();
   }
 
   canSkipHand() {
@@ -1096,7 +1101,6 @@ export class PokerGame {
     const human = this.getLocalPlayer();
     return !!(
       human?.folded
-      && this.humanFoldedPreflop
       && this.phase !== 'idle'
       && this.phase !== 'showdown'
     );
@@ -1113,9 +1117,8 @@ export class PokerGame {
     if (!this.canSkipHand() || this.fastForward || this.replaying) return;
     this.clearAiTimer();
     this.fastForward = true;
-    this.onMessage('Skipping to end of hand…');
 
-    const MAX_STEPS = 600;
+    const MAX_STEPS = 800;
     for (let i = 0; i < MAX_STEPS; i++) {
       if (this.phase === 'idle' || this.phase === 'showdown') break;
 
@@ -1150,6 +1153,28 @@ export class PokerGame {
 
     this.fastForward = false;
     this.clearAiTimer();
+
+    if (this.phase !== 'idle' && this.phase !== 'showdown') {
+      const remaining = this.playersInHand();
+      if (remaining.length === 1) {
+        this.awardPot(remaining);
+      } else {
+        this.fastForward = true;
+        while (this.phase !== 'showdown' && this.phase !== 'idle') {
+          if (this.playersInHand().length <= 1) {
+            this.awardPot(this.playersInHand());
+            break;
+          }
+          if (this.isBettingRoundComplete() || this.isRunoutOnly()) {
+            this.nextPhase();
+          } else {
+            break;
+          }
+        }
+        this.fastForward = false;
+      }
+    }
+
     this.onUpdate();
   }
 
