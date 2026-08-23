@@ -373,12 +373,7 @@ function setModalMessage(el, message, isSuccess = false) {
 }
 
 function flushSoloSave() {
-  if (game.onlineMode || game.replaying) return;
-  if (!game.soloSessionActive) {
-    clearSoloState();
-    if (auth.isLoggedIn()) auth.clearSoloGame();
-    return;
-  }
+  if (game.onlineMode || game.replaying || !game.soloSessionActive) return;
   const state = game.exportSoloState();
   if (!state) return;
   saveSoloState(state);
@@ -386,16 +381,8 @@ function flushSoloSave() {
 }
 
 function scheduleSoloSave() {
-  if (game.onlineMode || game.replaying) return;
+  if (game.onlineMode || game.replaying || !game.soloSessionActive) return;
   clearTimeout(soloSaveTimer);
-  if (!game.soloSessionActive) {
-    soloSaveTimer = setTimeout(() => {
-      if (game.onlineMode || game.replaying) return;
-      clearSoloState();
-      if (auth.isLoggedIn()) auth.clearSoloGame();
-    }, 250);
-    return;
-  }
   const state = game.exportSoloState();
   if (state) saveSoloState(state);
   soloSaveTimer = setTimeout(async () => {
@@ -1725,21 +1712,19 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function tryRestoreSoloSession() {
-  let state = null;
-  if (auth.isLoggedIn()) {
+  // Prefer local save on refresh (instant). Fall back to cloud if logged in.
+  let state = loadSoloState();
+  if (!state?.sessionActive && auth.isLoggedIn()) {
     state = await auth.loadSoloGame();
   }
-  if (!state) state = loadSoloState();
-  if (!state?.sessionActive) {
-    if (state) clearSoloState();
-    return false;
-  }
+  if (!state?.sessionActive) return false;
   if (!game.restoreSoloState(state)) {
     clearSoloState();
     if (auth.isLoggedIn()) auth.clearSoloGame();
     return false;
   }
   saveSoloState(state);
+  if (auth.isLoggedIn()) auth.saveSoloGame(state);
   game.setShowBotHandsAtEnd(showBotHandsAtEnd);
   game.setShowInBB(showInBB);
   syncSoloUIFromGame();
