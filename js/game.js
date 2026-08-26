@@ -539,7 +539,11 @@ export class PokerGame {
   }
 
   restoreSoloState(state) {
-    if (!state || state.v !== 1 || !state.sessionActive) return false;
+    if (!state?.sessionActive) return false;
+    if (state.bankrollOnly || !Array.isArray(state.players) || !state.players.length) {
+      return this.restoreSoloBankroll(state);
+    }
+    if (state.v !== 1) return this.restoreSoloBankroll(state);
     this.clearAiTimer();
     this.onlineMode = false;
     this.serverMode = false;
@@ -572,7 +576,7 @@ export class PokerGame {
     this.currentHandEvents = null;
     this.opponentProfiles = state.opponentProfiles ?? null;
     this.handReadState = null;
-    this.players = (state.players || []).map(p => ({
+    this.players = state.players.map(p => ({
       id: p.id,
       name: p.name,
       isHuman: p.isHuman,
@@ -584,7 +588,65 @@ export class PokerGame {
       inHand: p.inHand,
     }));
     if (this.phase !== 'idle' && this.phase !== 'showdown') {
-      this.processTurn();
+      try {
+        this.processTurn();
+      } catch {
+        this.phase = 'idle';
+        this.pot = 0;
+        this.currentBet = 0;
+        this.community = [];
+        for (const p of this.players) {
+          p.hole = [];
+          p.bet = 0;
+        }
+      }
+    }
+    return true;
+  }
+
+  /** Restore stacks only (used when the full hand snapshot cannot be loaded). */
+  restoreSoloBankroll(state) {
+    const chips = state?.chips;
+    const humanChips = state?.humanChips;
+    if (!state?.sessionActive) return false;
+    if (!Array.isArray(chips) && !Number.isFinite(humanChips)) return false;
+    this.clearAiTimer();
+    this.onlineMode = false;
+    this.serverMode = false;
+    this.replaying = false;
+    this.soloSessionActive = true;
+    this.playerCount = state.playerCount || this.playerCount;
+    this.bigBlind = state.bigBlind || this.bigBlind;
+    this.startingStack = state.startingStack || this.startingStack;
+    this.anteFraction = state.anteFraction ?? 0;
+    this.dealerIndex = state.dealerIndex ?? 0;
+    this.phase = 'idle';
+    this.deck = [];
+    this.community = [];
+    this.pot = 0;
+    this.currentBet = 0;
+    this.minRaise = this.bigBlind;
+    this.activeIndex = 0;
+    this.lastRaiser = -1;
+    this.handHistory = [];
+    this.actedThisRound = new Set();
+    this.preflopAggressor = -1;
+    this.bettingLine = createBettingLine();
+    this.humanFoldedPreflop = false;
+    this.fastForward = false;
+    this.handsRevealed = false;
+    this.lastHandReplay = null;
+    this.handSnapshot = null;
+    this.currentHandEvents = null;
+    this.handReadState = null;
+    this.resetPlayers();
+    if (Array.isArray(chips)) {
+      this.players.forEach((p, i) => {
+        if (Number.isFinite(chips[i])) p.chips = chips[i];
+      });
+    } else {
+      const human = this.players.find(p => p.isHuman);
+      if (human) human.chips = humanChips;
     }
     return true;
   }

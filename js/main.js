@@ -1696,6 +1696,36 @@ elements.authEmail?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') elements.authPassword?.focus();
 });
 
+function applyRestoredSoloState(state, { announce = true } = {}) {
+  if (!state?.sessionActive) return false;
+  try {
+    if (!game.restoreSoloState(state)) return false;
+  } catch {
+    return false;
+  }
+  game.setShowBotHandsAtEnd(showBotHandsAtEnd);
+  game.setShowInBB(showInBB);
+  syncSoloUIFromGame();
+  if (announce) {
+    const betweenHands = game.phase === 'idle' || game.phase === 'showdown';
+    setMessage(
+      elements.message,
+      betweenHands ? 'Restored your game.' : 'Restored your hand.',
+    );
+  }
+  renderGame(game, elements);
+  return true;
+}
+
+/** Restore solo chips immediately from disk — do not wait on network/auth (iOS refresh). */
+function restoreSoloFromDisk({ announce = true } = {}) {
+  if (game.onlineMode || loadRoomSession() || getRoomFromUrl()) return false;
+  if (game.soloSessionActive) return true;
+  const state = loadSoloState();
+  return applyRestoredSoloState(state, { announce });
+}
+
+restoreSoloFromDisk();
 renderGame(game, elements);
 
 let resizeTimer;
@@ -1707,33 +1737,52 @@ window.addEventListener('orientationchange', () => {
   setTimeout(() => renderGame(game, elements), 150);
 });
 window.addEventListener('pagehide', () => flushSoloSave());
+window.addEventListener('beforeunload', () => flushSoloSave());
+document.addEventListener('freeze', () => flushSoloSave());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushSoloSave();
 });
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    flushSoloSave();
+    return;
+  }
+  if (!game.onlineMode && !game.soloSessionActive) {
+    restoreSoloFromDisk();
+  }
+});
 
 async function tryRestoreSoloSession() {
+  if (game.soloSessionActive && !game.onlineMode) {
+    const state = game.exportSoloState();
+    if (state) {
+      saveSoloState(state);
+      if (auth.isLoggedIn()) auth.saveSoloGame(state);
+    }
+    renderGame(game, elements);
+    return true;
+  }
+  if (restoreSoloFromDisk()) {
+    const state = game.exportSoloState();
+    if (state) {
+      saveSoloState(state);
+      if (auth.isLoggedIn()) auth.saveSoloGame(state);
+    }
+    return true;
+  }
   // Prefer local save on refresh (instant). Fall back to cloud if logged in.
   let state = loadSoloState();
   if (!state?.sessionActive && auth.isLoggedIn()) {
     state = await auth.loadSoloGame();
   }
   if (!state?.sessionActive) return false;
-  if (!game.restoreSoloState(state)) {
+  if (!applyRestoredSoloState(state)) {
     clearSoloState();
     if (auth.isLoggedIn()) auth.clearSoloGame();
     return false;
   }
   saveSoloState(state);
   if (auth.isLoggedIn()) auth.saveSoloGame(state);
-  game.setShowBotHandsAtEnd(showBotHandsAtEnd);
-  game.setShowInBB(showInBB);
-  syncSoloUIFromGame();
-  const betweenHands = game.phase === 'idle' || game.phase === 'showdown';
-  setMessage(
-    elements.message,
-    betweenHands ? 'Restored your game.' : 'Restored your hand.',
-  );
-  renderGame(game, elements);
   return true;
 }
 
@@ -1753,6 +1802,9 @@ async function tryRestoreOnlineSession() {
 const roomFromUrl = getRoomFromUrl();
 initI18n();
 syncLangMenu();
+if (game.soloSessionActive && !game.onlineMode) {
+  renderGame(game, elements);
+}
 initPwa();
 (async () => {
   accountsEnabled = await auth.checkDbAvailable();
@@ -1778,7 +1830,7 @@ initPwa();
   if (roomFromUrl) {
     pendingInviteRoomId = roomFromUrl;
     showJoinModal(elements, roomFromUrl, { invited: true });
-  } else {
+  } else if (!game.soloSessionActive) {
     setMessage(elements.message, t('msg.dealPrompt'));
   }
 })();

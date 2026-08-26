@@ -203,34 +203,100 @@ export function clearRoomSession() {
 }
 
 const SOLO_STATE_KEY = 'poker-solo-state';
+const SOLO_BANKROLL_KEY = 'poker-solo-bankroll';
 
-export function saveSoloState(state) {
-  if (!state) return;
+function storageGet(key) {
   try {
-    localStorage.setItem(SOLO_STATE_KEY, JSON.stringify(state));
-  } catch { /* ignore */ }
+    const value = localStorage.getItem(key);
+    if (value != null) return value;
+  } catch { /* private mode / blocked */ }
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
-export function loadSoloState() {
+function storageSet(key, value) {
+  let wrote = false;
   try {
-    let raw = localStorage.getItem(SOLO_STATE_KEY);
-    if (!raw) {
-      raw = sessionStorage.getItem(SOLO_STATE_KEY);
-      if (raw) {
-        localStorage.setItem(SOLO_STATE_KEY, raw);
-        sessionStorage.removeItem(SOLO_STATE_KEY);
-      }
-    }
-    if (!raw) return null;
+    localStorage.setItem(key, value);
+    // Safari iOS batches writes and can drop them on pull-to-refresh unless read back.
+    void localStorage.getItem(key);
+    wrote = true;
+  } catch { /* quota / private mode */ }
+  try {
+    sessionStorage.setItem(key, value);
+    wrote = true;
+  } catch { /* ignore */ }
+  return wrote;
+}
+
+function storageRemove(key) {
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
+  try { sessionStorage.removeItem(key); } catch { /* ignore */ }
+}
+
+function parseStored(raw) {
+  if (!raw) return null;
+  try {
     return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-export function clearSoloState() {
+function soloBankrollFromState(state) {
+  const players = state.players || [];
+  const human = players.find(p => p.isHuman) || players[0];
+  return {
+    v: 1,
+    sessionActive: true,
+    bankrollOnly: true,
+    playerCount: state.playerCount,
+    bigBlind: state.bigBlind,
+    startingStack: state.startingStack,
+    anteFraction: state.anteFraction ?? 0,
+    dealerIndex: state.dealerIndex ?? 0,
+    chips: players.map(p => p.chips),
+    humanChips: human?.chips,
+  };
+}
+
+function strippedSoloState(state) {
+  return {
+    ...state,
+    lastHandReplay: null,
+    handSnapshot: null,
+    currentHandEvents: null,
+    opponentProfiles: null,
+    handHistory: [],
+  };
+}
+
+export function saveSoloState(state) {
+  if (!state) return;
+  const bankroll = soloBankrollFromState(state);
   try {
-    localStorage.removeItem(SOLO_STATE_KEY);
-    sessionStorage.removeItem(SOLO_STATE_KEY);
+    storageSet(SOLO_BANKROLL_KEY, JSON.stringify(bankroll));
   } catch { /* ignore */ }
+  const payloads = [state, strippedSoloState(state), bankroll];
+  for (const payload of payloads) {
+    try {
+      if (storageSet(SOLO_STATE_KEY, JSON.stringify(payload))) return;
+    } catch { /* circular / quota */ }
+  }
+}
+
+export function loadSoloState() {
+  const full = parseStored(storageGet(SOLO_STATE_KEY));
+  if (full?.sessionActive) return full;
+  const bankroll = parseStored(storageGet(SOLO_BANKROLL_KEY));
+  if (bankroll?.sessionActive) return bankroll;
+  return null;
+}
+
+export function clearSoloState() {
+  storageRemove(SOLO_STATE_KEY);
+  storageRemove(SOLO_BANKROLL_KEY);
 }
