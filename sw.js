@@ -1,5 +1,5 @@
 /* Poker Games Club — cache shell for offline launch; network for API/game. */
-const CACHE = 'poker-club-v2';
+const CACHE = 'poker-club-v3';
 const PRECACHE = [
   '/',
   '/index.html',

@@ -738,6 +738,12 @@ header h1 {
   line-height: 1;
   cursor: pointer;
   padding: 0 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
 }
 
 .btn-close-details:hover { color: var(--text); }
@@ -1169,9 +1175,14 @@ header h1 {
   inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 1rem;
+  height: 100%;
+  max-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(4px);
 }
@@ -1181,6 +1192,7 @@ header h1 {
 .join-modal-card {
   width: 100%;
   max-width: 380px;
+  margin-block: auto;
   background: var(--surface);
   border: 1px solid var(--gold);
   border-radius: 14px;
@@ -1878,6 +1890,47 @@ body.invite-join-pending .multiplayer-panel {
 
 .auth-modal-card {
   max-width: 380px;
+}
+
+.account-modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: hidden;
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.account-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.account-modal-header h2 {
+  margin: 0;
+}
+
+.account-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0.35rem 0.1rem 0.75rem;
+}
+
+.account-modal-actions {
+  flex-shrink: 0;
+  padding-top: 0.65rem;
+  border-top: 1px solid #30363d;
+}
+
+.account-modal-card > .join-modal-error {
+  flex-shrink: 0;
+  margin: 0 0 0.5rem;
 }
 
 .auth-tabs {

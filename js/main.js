@@ -147,6 +147,7 @@ const elements = {
   accountModalError: document.getElementById('account-modal-error'),
   accountSaveBtn: document.getElementById('btn-account-save'),
   accountCancelBtn: document.getElementById('btn-account-cancel'),
+  accountCloseBtn: document.getElementById('btn-account-close'),
   accountDeletePassword: document.getElementById('account-delete-password'),
   accountDeleteBtn: document.getElementById('btn-account-delete'),
   forgotModal: document.getElementById('forgot-modal'),
@@ -514,23 +515,32 @@ function setAuthTab(tab) {
   setAuthModalError('');
 }
 
+function isCoarsePointer() {
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 function showAccountModal() {
   const user = auth.getUser();
   if (!user) return;
   if (elements.accountEmail) elements.accountEmail.value = user.email;
   if (elements.accountDisplayName) {
     elements.accountDisplayName.value = user.displayName || '';
-    elements.accountDisplayName.focus();
-    elements.accountDisplayName.select();
+    if (!isCoarsePointer()) {
+      elements.accountDisplayName.focus();
+      elements.accountDisplayName.select();
+    }
   }
   setModalMessage(elements.accountModalError, '');
   if (elements.accountDeletePassword) elements.accountDeletePassword.value = '';
   elements.accountModal?.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  elements.accountModal?.querySelector('.account-modal-body')?.scrollTo(0, 0);
   refreshStatsDisplay();
 }
 
 function hideAccountModal() {
   elements.accountModal?.classList.add('hidden');
+  document.body.classList.remove('modal-open');
   setModalMessage(elements.accountModalError, '');
   if (elements.accountDeletePassword) elements.accountDeletePassword.value = '';
 }
@@ -1672,6 +1682,14 @@ elements.authForgotBtn?.addEventListener('click', () => {
 elements.authResendBtn?.addEventListener('click', () => handleResendVerification());
 elements.accountSaveBtn?.addEventListener('click', () => handleAccountSave());
 elements.accountCancelBtn?.addEventListener('click', () => hideAccountModal());
+elements.accountCloseBtn?.addEventListener('click', () => hideAccountModal());
+elements.accountModal?.addEventListener('click', (e) => {
+  if (e.target === elements.accountModal) hideAccountModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!elements.accountModal?.classList.contains('hidden')) hideAccountModal();
+});
 elements.accountDeleteBtn?.addEventListener('click', () => handleAccountDelete());
 elements.accountDeletePassword?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') handleAccountDelete();
